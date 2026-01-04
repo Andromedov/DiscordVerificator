@@ -71,7 +71,7 @@ public class JoinListener implements Listener {
             // Kick with code
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     String.format(DiscordVerificatorPlugin.getMessage("confirm-with-command"), code));
-        }
+        } else { userManager.updatePlayerLoginTime(playerName); }
     }
 
     private String getMessage(String key) {

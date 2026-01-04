@@ -57,6 +57,7 @@ public class DatabaseService {
         String createLinksTable = "CREATE TABLE IF NOT EXISTS linked_accounts (" +
                 "minecraft_username TEXT PRIMARY KEY, " +
                 "discord_id TEXT NOT NULL, " +
+                "last_login TIMESTAMP, " +
                 "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
                 ");";
 

@@ -16,7 +16,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Logger;
 
 // Performs actions on users and loads/saves from/to SQLite
@@ -63,14 +65,11 @@ public class UserManager {
                 } catch (Exception e) { logger.warning("Failed to migrate user: " + oldUser.getDiscordId()); e.printStackTrace(); }
             }
 
-            logger.info("Migration finished! Migrated " + migratedCount + " users.");
-
             // Rename JSON file so we don't migrate again
             File renamed = new File(jsonPath + ".old");
             jsonFile.renameTo(renamed);
-            logger.info("Renamed users.json to users.json.old");
-
-        } catch (IOException e) { logger.severe("Failed to read users.json for migration!"); e.printStackTrace(); }
+            logger.info("Renamed users.json to users.json.old. Migrated " + migratedCount + " users.");
+        } catch (IOException e) { e.printStackTrace(); }
     }
 
     // --- CORE DATABASE METHODS ---
@@ -110,7 +109,6 @@ public class UserManager {
             ResultSet rs = pstmt.executeQuery();
 
             if (rs.next()) {
-                User user = new User(); // We are using User merely as a DTO now
                 return new User(
                         rs.getString("discord_id"),
                         getLinkedAccounts(discordId),
@@ -120,6 +118,41 @@ public class UserManager {
             }
         } catch (SQLException e) { e.printStackTrace(); }
         throw new UserNotFoundException();
+    }
+
+    // --- /INFO COMMAND ---
+    public Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {
+        String sql = "SELECT l.discord_id, l.last_login, u.current_allowed_ip " +
+                "FROM linked_accounts l " +
+                "JOIN users u ON l.discord_id = u.discord_id " +
+                "WHERE l.minecraft_username = ? COLLATE NOCASE";
+
+        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, minecraftUsername);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                Map<String, String> info = new HashMap<>();
+                info.put("discord_id", rs.getString("discord_id"));
+                info.put("current_ip", rs.getString("current_allowed_ip"));
+
+                Timestamp lastLogin = rs.getTimestamp("last_login");
+                info.put("last_login", lastLogin != null ? lastLogin.toString() : "Never/Unknown");
+
+                return info;
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        throw new UserNotFoundException();
+    }
+
+    // --- UPDATING LOGIN TIME ---
+    public void updatePlayerLoginTime(String minecraftUsername) {
+        String sql = "UPDATE linked_accounts SET last_login = ? WHERE minecraft_username = ? COLLATE NOCASE";
+        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setTimestamp(1, Timestamp.from(Instant.now()));
+            pstmt.setString(2, minecraftUsername);
+            pstmt.executeUpdate();
+        } catch (SQLException e) { e.printStackTrace(); }
     }
 
     private List<String> getLinkedAccounts(String discordId) {
