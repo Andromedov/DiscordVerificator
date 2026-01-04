@@ -14,7 +14,6 @@ import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import javax.security.auth.login.LoginException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
