@@ -19,6 +19,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 public class DiscordVerificatorPlugin extends JavaPlugin {
@@ -84,7 +85,21 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (userManager != null) userManager.onShutDown(); // Closes DB connection
-        if (currentJDA != null) currentJDA.shutdown();
+
+        if (currentJDA != null) {
+            currentJDA.removeEventListener(discordBot);
+            currentJDA.shutdown();
+            try {
+                if (!currentJDA.awaitShutdown(10, TimeUnit.SECONDS)) {
+                    logger.warning("JDA took too long to shutdown, forcing...");
+                    currentJDA.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                logger.warning("Interrupted while waiting for JDA to shutdown!");
+                currentJDA.shutdownNow();
+                Thread.currentThread().interrupt(); // Restore interrupted status
+            }
+        }
         logger.info("Shutting down!");
     }
 
@@ -109,8 +124,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     }
 
     public void reload() {
-        try { currentJDA.shutdownNow(); }
-        catch (Exception ignored) { }
+        if (currentJDA != null) {
+            currentJDA.shutdown();
+        }
 
         // Reloading the config
         reloadConfig();
