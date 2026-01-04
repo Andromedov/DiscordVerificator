@@ -78,8 +78,7 @@ public class UserManager {
     private void upsertUser(String discordId, String currentIp) throws SQLException {
         String sql = "INSERT INTO users (discord_id, current_allowed_ip) VALUES(?, ?) " +
                 "ON CONFLICT(discord_id) DO UPDATE SET current_allowed_ip = ?";
-        try (Connection conn = databaseService.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
             pstmt.setString(2, currentIp);
             pstmt.setString(3, currentIp);
@@ -89,8 +88,7 @@ public class UserManager {
 
     public String getDiscordIdByMinecraftUsername(String minecraftUsername) throws UserNotFoundException {
         String sql = "SELECT discord_id FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
-        try (Connection conn = databaseService.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, minecraftUsername);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
@@ -104,16 +102,19 @@ public class UserManager {
 
     public User getFullUserByDiscordId(String discordId) throws UserNotFoundException {
         String sql = "SELECT * FROM users WHERE discord_id = ?";
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
             ResultSet rs = pstmt.executeQuery();
 
             if (rs.next()) {
+                String id = rs.getString("discord_id");
+                String ip = rs.getString("current_allowed_ip");
+
                 return new User(
-                        rs.getString("discord_id"),
-                        getLinkedAccounts(discordId),
-                        null, // History handled separately
-                        rs.getString("current_allowed_ip")
+                        id,
+                        getLinkedAccounts(id),
+                        null,
+                        ip
                 );
             }
         } catch (SQLException e) { e.printStackTrace(); }
@@ -127,7 +128,7 @@ public class UserManager {
                 "JOIN users u ON l.discord_id = u.discord_id " +
                 "WHERE l.minecraft_username = ? COLLATE NOCASE";
 
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, minecraftUsername);
             ResultSet rs = pstmt.executeQuery();
 
@@ -148,7 +149,7 @@ public class UserManager {
     // --- UPDATING LOGIN TIME ---
     public void updatePlayerLoginTime(String minecraftUsername) {
         String sql = "UPDATE linked_accounts SET last_login = ? WHERE minecraft_username = ? COLLATE NOCASE";
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setTimestamp(1, Timestamp.from(Instant.now()));
             pstmt.setString(2, minecraftUsername);
             pstmt.executeUpdate();
@@ -158,7 +159,7 @@ public class UserManager {
     private List<String> getLinkedAccounts(String discordId) {
         List<String> accounts = new java.util.ArrayList<>();
         String sql = "SELECT minecraft_username FROM linked_accounts WHERE discord_id = ?";
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) { accounts.add(rs.getString("minecraft_username")); }
@@ -168,7 +169,7 @@ public class UserManager {
 
     public void updateIp(String discordId, String newIp) throws UserNotFoundException {
         String sql = "UPDATE users SET current_allowed_ip = ? WHERE discord_id = ?";
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, newIp);
             pstmt.setString(2, discordId);
             int affected = pstmt.executeUpdate();
@@ -182,7 +183,7 @@ public class UserManager {
         } catch (SQLException e) { e.printStackTrace(); return; }
 
         String sql = "INSERT INTO linked_accounts (minecraft_username, discord_id) VALUES (?, ?)";
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, minecraftUsername);
             pstmt.setString(2, discordId);
             pstmt.executeUpdate();
@@ -196,8 +197,7 @@ public class UserManager {
 
     public void unlinkUser(String minecraftUsername) throws NotFoundException {
         String sql = "DELETE FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
-        try (Connection conn = databaseService.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, minecraftUsername);
             int rows = pstmt.executeUpdate();
             if (rows == 0) throw new NotFoundException();
@@ -207,7 +207,7 @@ public class UserManager {
     // --- HISTORY / SPAM PREVENTION LOGIC ---
     public void updateLastTimeUserReceivedCode(String discordId, String ip) {
         String sql = "INSERT INTO verification_history (discord_id, ip_address, last_received) VALUES (?, ?, ?)";
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
             pstmt.setString(2, ip);
             pstmt.setTimestamp(3, Timestamp.from(Instant.now()));
@@ -219,7 +219,7 @@ public class UserManager {
 
     public long getSecondsSinceLastCode(String discordId, String ip) throws NoCodesFoundException {
         String sql = "SELECT last_received FROM verification_history WHERE discord_id = ? AND ip_address = ? ORDER BY last_received DESC LIMIT 1";
-        try (Connection conn = databaseService.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
             pstmt.setString(2, ip);
             ResultSet rs = pstmt.executeQuery();
@@ -232,7 +232,5 @@ public class UserManager {
         throw new NoCodesFoundException();
     }
 
-    public void onShutDown() {
-        databaseService.closeConnection();
-    }
+    public void onShutDown() { databaseService.closeConnection(); }
 }
