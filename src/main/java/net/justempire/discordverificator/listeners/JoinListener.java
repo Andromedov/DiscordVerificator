@@ -6,15 +6,10 @@ import net.justempire.discordverificator.models.User;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
-import org.bukkit.entity.Player;
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.PlayerLoginEvent;
-
-import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.Date;
 
 public class JoinListener implements Listener {
     private final UserManager userManager;
@@ -27,66 +22,56 @@ public class JoinListener implements Listener {
         this.confirmationCodeService = confirmationCodeService;
     }
 
-    @EventHandler
-    public void onPlayerJoined(PlayerLoginEvent event) throws UserNotFoundException {
-        User user;
-        Player player = event.getPlayer();
+    @EventHandler(priority = EventPriority.NORMAL)
+    public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) {
+        String playerName = event.getName();
         String ipAddress = event.getAddress().getHostAddress();
 
-        // Trying to get the user by his linked in-game username
-        try { user = userManager.getByMinecraftUsername(player.getName());}
-        catch (UserNotFoundException e) {
-            // If user wasn't found
-            preventJoin(event, getMessage("account-not-linked"));
+        User user;
+        String discordId;
+
+        // 1. Try to get Discord ID by Minecraft Username (Database Call)
+        try {
+            discordId = userManager.getDiscordIdByMinecraftUsername(playerName);
+            // Reconstruct a lightweight user object or fetch full data
+            user = userManager.getFullUserByDiscordId(discordId);
+        } catch (UserNotFoundException e) {
+            // Block join
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("account-not-linked"));
             return;
         }
 
-        // Check if bot is working
+        // 2. Check if bot is working
         if (!plugin.getDiscordBot().isBotEnabled()) {
-            preventJoin(event, getMessage("bot-not-working"));
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("bot-not-working"));
             return;
         }
 
-        // Ensure that no more than 30 seconds have passed since this player last joined
-        if (!user.getCurrentAllowedIp().equals(ipAddress)) {
-            Date now = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
-            Date latestVerificationSent;
+        // 3. IP Check
+        if (!ipAddress.equals(user.getCurrentAllowedIp())) {
+
+            // Check throttling (Spam prevention)
             try {
-                latestVerificationSent = user.getLastTimeUserReceivedCode(ipAddress);
-                long differenceInSeconds = getDifferenceInSeconds(latestVerificationSent, now);
-                if (differenceInSeconds < 30) {
-                    preventJoin(event, String.format(getMessage("wait-until-verification"), 30 - differenceInSeconds));
+                long secondsSinceLast = userManager.getSecondsSinceLastCode(discordId, ipAddress);
+                if (secondsSinceLast < 30) {
+                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                            String.format(getMessage("wait-until-verification"), 30 - secondsSinceLast));
                     return;
                 }
+            } catch (NoCodesFoundException ignored) {
+                // No previous codes, proceed
             }
-            catch (NoCodesFoundException e) {
-                userManager.updateLastTimeUserReceivedCode(user.getDiscordId(), ipAddress);
-            }
+
+            // Generate Code
+            String code = confirmationCodeService.generateVerificationCode(playerName, ipAddress);
+
+            // Log verification attempt (Database Call)
+            userManager.updateLastTimeUserReceivedCode(discordId, ipAddress);
+
+            // Kick with code
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                    String.format(DiscordVerificatorPlugin.getMessage("confirm-with-command"), code));
         }
-
-        // If current IP is not equal to IP in database, show verification code to the user
-        if (!user.getCurrentAllowedIp().equals(ipAddress)) {
-            String code = confirmationCodeService.generateVerificationCode(player.getName(), ipAddress);
-
-            userManager.updateLastTimeUserReceivedCode(user.getDiscordId(), ipAddress);
-
-            event.setResult(PlayerLoginEvent.Result.KICK_OTHER);
-            preventJoin(event, String.format(DiscordVerificatorPlugin.getMessage("confirm-with-command"), code));
-        }
-    }
-
-    private long getDifferenceInSeconds(Date startDate, Date endDate) {
-        LocalDateTime startDateTime = startDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-        LocalDateTime endDateTime = endDate.toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime();
-
-        Duration duration = Duration.between(startDateTime, endDateTime);
-        return duration.getSeconds();
-    }
-
-    private void preventJoin(PlayerLoginEvent event, String message) {
-        event.setResult(PlayerLoginEvent.Result.KICK_OTHER);
-        event.setKickMessage(message);
-        event.disallow(event.getResult(), message);
     }
 
     private String getMessage(String key) {
