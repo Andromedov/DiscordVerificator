@@ -3,6 +3,7 @@ package net.justempire.discordverificator;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
+import net.justempire.discordverificator.commands.InfoCommand;
 import net.justempire.discordverificator.commands.LinkCommand;
 import net.justempire.discordverificator.commands.ReloadCommand;
 import net.justempire.discordverificator.commands.UnlinkCommand;
@@ -15,11 +16,9 @@ import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import javax.security.auth.login.LoginException;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 public class DiscordVerificatorPlugin extends JavaPlugin {
@@ -75,6 +74,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
         ReloadCommand reloadCommand = new ReloadCommand(this);
         getCommand("dvreload").setExecutor(reloadCommand);
+
+        InfoCommand infoCommand = new InfoCommand(this, userManager);
+        getCommand("info").setExecutor(infoCommand);
 
         logger.info("Enabled successfully!");
     }
