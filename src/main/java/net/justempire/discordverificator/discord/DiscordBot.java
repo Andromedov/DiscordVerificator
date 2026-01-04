@@ -1,23 +1,23 @@
 package net.justempire.discordverificator.discord;
 
 import net.dv8tion.jda.api.EmbedBuilder;
-import net.dv8tion.jda.api.entities.*;
-import net.dv8tion.jda.api.events.ReadyEvent;
-import net.dv8tion.jda.api.events.ReconnectedEvent;
-import net.dv8tion.jda.api.events.ShutdownEvent;
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.session.ReadyEvent;
+import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
-
 import net.dv8tion.jda.api.interactions.commands.OptionMapping;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
-import net.dv8tion.jda.api.interactions.commands.build.CommandData;
+import net.dv8tion.jda.api.interactions.commands.build.Commands;
+import net.dv8tion.jda.api.interactions.commands.build.SlashCommandData;
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.exceptions.InvalidCodeException;
+import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.models.UsernameAndIp;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.UserManager;
-import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import org.jetbrains.annotations.NotNull;
+
 import java.util.logging.Logger;
 
 public class DiscordBot extends ListenerAdapter {
@@ -41,18 +41,13 @@ public class DiscordBot extends ListenerAdapter {
 
     @Override
     public void onReady(@NotNull ReadyEvent event) {
-        CommandData commandData = new CommandData("confirm", getMessage("confirm-command"));
+        SlashCommandData commandData = Commands.slash("confirm", getMessage("confirm-command"));
         commandData.addOption(OptionType.STRING, "code", getMessage("verification-code-you-got"));
+
         event.getJDA().updateCommands().addCommands(commandData).complete();
 
         botEnabled = true;
         logger.info("Bot started!");
-    }
-
-    @Override
-    public void onReconnected(@NotNull ReconnectedEvent event) {
-        logger.info("Bot reconnected!");
-        botEnabled = true;
     }
 
     public boolean isBotEnabled() {
@@ -60,12 +55,12 @@ public class DiscordBot extends ListenerAdapter {
     }
 
     @Override
-    public void onSlashCommand(@NotNull SlashCommandEvent event) {
+    public void onSlashCommandInteraction(@NotNull SlashCommandInteractionEvent event) {
         // If command is "confirm"
         if (event.getName().equals("confirm")) onConfirmSlashCommand(event);
     }
 
-    private void onConfirmSlashCommand(@NotNull SlashCommandEvent event) {
+    private void onConfirmSlashCommand(@NotNull SlashCommandInteractionEvent event) {
         // Getting ID of sender
         String discordId = event.getUser().getId();
 
@@ -90,8 +85,9 @@ public class DiscordBot extends ListenerAdapter {
         }
 
         try {
-            // Return if user tries to confirm someone else's code
-            if (!userManager.getByMinecraftUsername(codeData.getUsername()).getDiscordId().equals(discordId)) {
+            String linkedDiscordId = userManager.getDiscordIdByMinecraftUsername(codeData.getUsername());
+
+            if (!linkedDiscordId.equals(discordId)) {
                 MessageEmbed embed = generateEmbed(getMessage("error-occurred"), getMessage("its-not-your-account"), 0xF63B2D);
                 event.replyEmbeds(embed).setEphemeral(true).complete();
                 return;
@@ -125,7 +121,7 @@ public class DiscordBot extends ListenerAdapter {
     private void confirmIp(String discordId, String ip) throws UserNotFoundException {
         userManager.updateIp(discordId, ip);
     }
-    
+
     private String getMessage(String key) {
         return DiscordVerificatorPlugin.getMessage(key);
     }

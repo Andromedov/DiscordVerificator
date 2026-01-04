@@ -2,7 +2,7 @@ name: DiscordVerificator
 version: '${project.version}'
 main: net.justempire.discordverificator.DiscordVerificatorPlugin
 api-version: '1.20.6'
-author: 'mrquackduck', 'Andromedov'
+authors: ['mrquackduck', 'Andromedov']
 
 commands:
   link:
@@ -13,6 +13,9 @@ commands:
     usage: unlink <Player>
   dvreload:
     description: Reload the plugin
+  info:
+    description: Check player info
+    usage: info <Player>
 
 permissions:
   discordVerificator.link:
@@ -23,4 +26,7 @@ permissions:
     default: op
   discordVerificator.reload:
     description: Allows to reload the plugin
+    default: op
+  discordVerificator.info:
+    description: Allows to check info
     default: op
