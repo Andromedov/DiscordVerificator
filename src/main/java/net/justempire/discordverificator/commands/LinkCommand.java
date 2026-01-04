@@ -4,6 +4,7 @@ import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.MinecraftUsernameAlreadyLinkedException;
 import net.justempire.discordverificator.utils.MessageColorizer;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -11,8 +12,10 @@ import org.jetbrains.annotations.NotNull;
 
 public class LinkCommand implements CommandExecutor {
     private final UserManager userManager;
+    private final DiscordVerificatorPlugin plugin;
 
-    public LinkCommand(UserManager userManager) {
+    public LinkCommand(DiscordVerificatorPlugin plugin, UserManager userManager) {
+        this.plugin = plugin;
         this.userManager = userManager;
     }
 
@@ -36,13 +39,18 @@ public class LinkCommand implements CommandExecutor {
             return true;
         }
 
-        try {
-            userManager.linkUser(discordUserId, playerName);
-            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("successfully-linked")));
-        }
-        catch (MinecraftUsernameAlreadyLinkedException e) {
-            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("player-already-linked")));
-        }
+        // Run database operation asynchronously
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                userManager.linkUser(discordUserId, playerName);
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("successfully-linked")));
+            } catch (MinecraftUsernameAlreadyLinkedException e) {
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("player-already-linked")));
+            } catch (Exception e) {
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("error-occurred")));
+                e.printStackTrace();
+            }
+        });
 
         return true;
     }
