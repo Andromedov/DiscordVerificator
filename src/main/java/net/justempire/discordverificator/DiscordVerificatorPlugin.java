@@ -3,7 +3,6 @@ package net.justempire.discordverificator;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
-import net.dv8tion.jda.api.utils.ChunkingFilter;
 import net.justempire.discordverificator.commands.LinkCommand;
 import net.justempire.discordverificator.commands.ReloadCommand;
 import net.justempire.discordverificator.commands.UnlinkCommand;
@@ -18,6 +17,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import javax.security.auth.login.LoginException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 public class DiscordVerificatorPlugin extends JavaPlugin {
@@ -86,17 +86,24 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                     // .setChunkingFilter(ChunkingFilter.ALL)
                     .setStatus(OnlineStatus.ONLINE)
                     .build();
-        }
-        catch (LoginException e)
-        { logger.severe(MessageColorizer.colorize("Wrong discord bot token provided!")); }
+        } catch (Exception e) { e.printStackTrace();}
 
         this.discordBot = bot;
     }
 
     public void reload() {
         // Trying to shut down the bot
-        try { currentJDA.shutdownNow(); }
-        catch (Exception ignored) { }
+        if (currentJDA != null) {
+            currentJDA.shutdown();
+            try {
+                if (!currentJDA.awaitShutdown(5, TimeUnit.SECONDS)) {
+                    currentJDA.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+                currentJDA.shutdownNow();
+            }
+        }
 
         // Reloading the config
         reloadConfig();
