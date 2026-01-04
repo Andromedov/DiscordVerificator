@@ -40,11 +40,13 @@ To join the server, the player should run the seen command to the **Discord bot*
 - `/link <player> <discordId>` — links the player to its Discord profile. ([how to get discord id?](https://youtu.be/RzTWH0g2xbo?si=oQT2rCSuf6B3Z5kY))
 - `/unlink <player>` — unlinks the player from its Discord profile.
 - `/dvreload` — reloads the plugin (_including Discord bot_).
+- `/info <player>` — shows information about the player.
   
 ## 🔞 Permissions
 - `discordVerificator.link` _(for **operators** by default)_ — Allows to use `/link <player> <discordId>`
 - `discordVerificator.unlink` _(for **operators** by default)_ — Allows to use `/unlink <player>`
 - `discordVerificator.reload` _(for **operators** by default)_ — Allows to use `/dvreload`
+- `discordVerificator.info` _(for **operators** by default)_ — Allows to use `/info <player>`
 
 ## 📄 Default config
 > [!IMPORTANT]
