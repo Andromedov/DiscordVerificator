@@ -1,7 +1,7 @@
 name: DiscordVerificator
 version: '${project.version}'
 main: net.justempire.discordverificator.DiscordVerificatorPlugin
-api-version: '1.20.6'
+api-version: '1.21'
 author: 'mrquackduck', 'Andromedov'
 
 commands:
