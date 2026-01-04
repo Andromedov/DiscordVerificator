@@ -83,7 +83,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             this.currentJDA = JDABuilder.createLight(token)
                     .addEventListeners(bot)
                     .setAutoReconnect(true)
-                    .setChunkingFilter(ChunkingFilter.ALL)
+                    // .setChunkingFilter(ChunkingFilter.ALL)
                     .setStatus(OnlineStatus.ONLINE)
                     .build();
         }

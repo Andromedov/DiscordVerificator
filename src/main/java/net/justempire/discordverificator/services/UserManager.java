@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 // Performs actions on users and loads/saves from/to JSON
 public class UserManager {
@@ -112,10 +113,14 @@ public class UserManager {
     }
 
     private void saveUsers() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, true);
-        try { objectMapper.writerWithDefaultPrettyPrinter().writeValue(new File(pathToJson), userList); }
-        catch (IOException e) { throw new RuntimeException(e); }
+        List<User> usersSnapshot = new ArrayList<>(this.userList);
+
+        CompletableFuture.runAsync(() -> {
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, true);
+            try { objectMapper.writerWithDefaultPrettyPrinter().writeValue(new File(pathToJson), usersSnapshot); }
+            catch (IOException e) { e.printStackTrace(); }
+        });
     }
 
     private void setUp(String pathToJson) {
