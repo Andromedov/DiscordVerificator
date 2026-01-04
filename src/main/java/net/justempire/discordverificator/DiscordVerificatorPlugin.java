@@ -9,11 +9,14 @@ import net.justempire.discordverificator.commands.UnlinkCommand;
 import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.listeners.JoinListener;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
+import net.justempire.discordverificator.services.DatabaseService;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import javax.security.auth.login.LoginException;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -21,6 +24,7 @@ import java.util.logging.Logger;
 
 public class DiscordVerificatorPlugin extends JavaPlugin {
     private Logger logger;
+    private DatabaseService databaseService;
     private UserManager userManager;
     private ConfirmationCodeService confirmationCodeService;
     private DiscordBot discordBot;
@@ -36,8 +40,21 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         // Setting up the logger
         logger = this.getLogger();
 
-        // Setting up services
-        userManager = new UserManager(String.format("%s/users.json", getDataFolder()));
+        // Initialize Database Service
+        databaseService = new DatabaseService(getDataFolder().getAbsolutePath(), logger);
+        try {
+            databaseService.initialize();
+        } catch (SQLException e) {
+            logger.severe("Could not initialize database! Disabling plugin.");
+            e.printStackTrace();
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        // Initialize UserManager with Database and JSON path for migration
+        String jsonPath = String.format("%s/users.json", getDataFolder());
+        userManager = new UserManager(databaseService, jsonPath, logger);
+
         confirmationCodeService = new ConfirmationCodeService();
 
         // Setting up the bot
@@ -50,10 +67,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new JoinListener(this, userManager, confirmationCodeService), this);
 
         // Setting up commands
-        LinkCommand linkCommand = new LinkCommand(userManager);
+        LinkCommand linkCommand = new LinkCommand(this, userManager);
         getCommand("link").setExecutor(linkCommand);
 
-        UnlinkCommand unlinkCommand = new UnlinkCommand(userManager);
+        UnlinkCommand unlinkCommand = new UnlinkCommand(this, userManager);
         getCommand("unlink").setExecutor(unlinkCommand);
 
         ReloadCommand reloadCommand = new ReloadCommand(this);
@@ -64,7 +81,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        userManager.onShutDown();
+        if (userManager != null) userManager.onShutDown(); // Closes DB connection
         if (currentJDA != null) currentJDA.shutdown();
         logger.info("Shutting down!");
     }
@@ -73,7 +90,6 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         return discordBot;
     }
 
-    // Setting up Discord bot
     private void setupBot() {
         String token = getConfig().getString("token");
         DiscordBot bot = new DiscordBot(logger, userManager, confirmationCodeService);
@@ -91,18 +107,8 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     }
 
     public void reload() {
-        // Trying to shut down the bot
-        if (currentJDA != null) {
-            currentJDA.shutdown();
-            try {
-                if (!currentJDA.awaitShutdown(5, TimeUnit.SECONDS)) {
-                    currentJDA.shutdownNow();
-                }
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-                currentJDA.shutdownNow();
-            }
-        }
+        try { currentJDA.shutdownNow(); }
+        catch (Exception ignored) { }
 
         // Reloading the config
         reloadConfig();
@@ -110,8 +116,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         // Reloading the messages from config
         setupMessages();
 
-        // Reloading JSON file where users are stored
-        userManager.reload();
+        // userManager.reload();
 
         // Starting the bot
         setupBot();
