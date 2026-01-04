@@ -85,8 +85,9 @@ public class DiscordBot extends ListenerAdapter {
         }
 
         try {
-            // Return if user tries to confirm someone else's code
-            if (!userManager.getByMinecraftUsername(codeData.getUsername()).getDiscordId().equals(discordId)) {
+            String linkedDiscordId = userManager.getDiscordIdByMinecraftUsername(codeData.getUsername());
+
+            if (!linkedDiscordId.equals(discordId)) {
                 MessageEmbed embed = generateEmbed(getMessage("error-occurred"), getMessage("its-not-your-account"), 0xF63B2D);
                 event.replyEmbeds(embed).setEphemeral(true).complete();
                 return;
