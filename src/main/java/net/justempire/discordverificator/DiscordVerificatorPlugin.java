@@ -85,7 +85,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                     // .setChunkingFilter(ChunkingFilter.ALL)
                     .setStatus(OnlineStatus.ONLINE)
                     .build();
-        } catch (Exception e) { e.printStackTrace();}
+        } catch (Exception e) { e.printStackTrace(); }
 
         this.discordBot = bot;
     }
@@ -141,4 +141,3 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         return MessageColorizer.colorize(messages.get(key));
     }
 }
-
