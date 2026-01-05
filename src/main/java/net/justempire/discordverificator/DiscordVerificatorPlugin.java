@@ -124,7 +124,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 return;
             }
 
-            DiscordBot bot = new DiscordBot(logger, userManager, confirmationCodeService);
+            DiscordBot bot = new DiscordBot(this, logger, userManager, confirmationCodeService);
 
             try {
                 // Ensure old instance is cleaned up if this is a retry
