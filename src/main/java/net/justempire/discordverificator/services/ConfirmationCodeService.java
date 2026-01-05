@@ -4,15 +4,13 @@ import net.justempire.discordverificator.exceptions.InvalidCodeException;
 import net.justempire.discordverificator.models.UsernameAndIp;
 import net.justempire.discordverificator.utils.VerificationCodeGenerator;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 public class ConfirmationCodeService {
     private final Map<String, UsernameAndIp> codesAndIps;
 
-    public ConfirmationCodeService() {
-        codesAndIps = new HashMap<>();
-    }
+    public ConfirmationCodeService() { codesAndIps = new ConcurrentHashMap<>(); }
 
     // Returns code
     public String generateVerificationCode(String username, String ip) {
