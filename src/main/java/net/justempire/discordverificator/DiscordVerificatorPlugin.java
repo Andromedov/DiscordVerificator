@@ -32,6 +32,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     private JDA currentJDA;
     private static Map<String, String> messages = new HashMap<>();
 
+    // Flag to prevent double reloading
+    private boolean isReloading = false;
+
     @Override
     public void onEnable() {
         // Creating a config if it doesn't exist
@@ -57,11 +60,11 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
         confirmationCodeService = new ConfirmationCodeService();
 
-        // Setting up the bot
-        setupBot();
-
         // Setting up the messages
         setupMessages();
+
+        // Setting up the bot
+        setupBot();
 
         // Setting up listeners
         getServer().getPluginManager().registerEvents(new JoinListener(this, userManager, confirmationCodeService), this);
@@ -86,11 +89,16 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     public void onDisable() {
         if (userManager != null) userManager.onShutDown(); // Closes DB connection
 
+        shutdownBotSync();
+        logger.info("Shutting down!");
+    }
+
+    private void shutdownBotSync() {
         if (currentJDA != null) {
             currentJDA.removeEventListener(discordBot);
             currentJDA.shutdown();
             try {
-                if (!currentJDA.awaitShutdown(10, TimeUnit.SECONDS)) {
+                if (!currentJDA.awaitShutdown(5, TimeUnit.SECONDS)) {
                     logger.warning("JDA took too long to shutdown, forcing...");
                     currentJDA.shutdownNow();
                 }
@@ -99,8 +107,8 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 currentJDA.shutdownNow();
                 Thread.currentThread().interrupt(); // Restore interrupted status
             }
+            currentJDA = null;
         }
-        logger.info("Shutting down!");
     }
 
     public DiscordBot getDiscordBot() {
@@ -108,36 +116,77 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     }
 
     private void setupBot() {
-        String token = getConfig().getString("token");
-        DiscordBot bot = new DiscordBot(logger, userManager, confirmationCodeService);
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            String token = getConfig().getString("token");
 
-        try {
-            this.currentJDA = JDABuilder.createLight(token)
-                    .addEventListeners(bot)
-                    .setAutoReconnect(true)
-                    // .setChunkingFilter(ChunkingFilter.ALL)
-                    .setStatus(OnlineStatus.ONLINE)
-                    .build();
-        } catch (Exception e) { e.printStackTrace(); }
+            if (token == null || token.contains("DISCORD_BOT_TOKEN")) {
+                logger.warning("Please set a valid bot token in config.yml!");
+                return;
+            }
 
-        this.discordBot = bot;
+            DiscordBot bot = new DiscordBot(logger, userManager, confirmationCodeService);
+
+            try {
+                // Ensure old instance is cleaned up if this is a retry
+                if (this.currentJDA != null) {
+                    this.currentJDA.shutdownNow();
+                }
+
+                this.currentJDA = JDABuilder.createLight(token)
+                        .addEventListeners(bot)
+                        .setAutoReconnect(true)
+                        .setStatus(OnlineStatus.ONLINE)
+                        .build();
+
+                // Wait for the bot to be ready (safe because we are async)
+                this.currentJDA.awaitReady();
+                this.discordBot = bot;
+
+                logger.info("Discord Bot connected and ready!");
+            } catch (Exception e) {
+                logger.severe("Failed to connect to Discord! Check your token or internet connection.");
+                e.printStackTrace();
+            }
+        });
     }
 
     public void reload() {
-        if (currentJDA != null) {
-            currentJDA.shutdown();
-        }
+        if (isReloading) return;
+        isReloading = true;
 
-        // Reloading the config
-        reloadConfig();
+        logger.info("Reloading plugin...");
 
-        // Reloading the messages from config
-        setupMessages();
+        // Run reload logic asynchronously
+        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                // 1. Shutdown existing bot completely
+                if (currentJDA != null) {
+                    currentJDA.shutdown();
+                    if (!currentJDA.awaitShutdown(10, TimeUnit.SECONDS)) {
+                        logger.warning("Forcing JDA shutdown during reload...");
+                        currentJDA.shutdownNow();
+                    }
+                    currentJDA = null;
+                }
 
-        // userManager.reload();
+                // 2. Reload config (Sync task required for Bukkit API safety)
+                getServer().getScheduler().runTask(this, () -> {
+                    reloadConfig();
+                    setupMessages();
 
-        // Starting the bot
-        setupBot();
+                    // 3. Start new bot (Async inside setupBot)
+                    setupBot();
+
+                    isReloading = false;
+                    logger.info("Reload complete!");
+                });
+
+            } catch (InterruptedException e) {
+                logger.severe("Reload interrupted!");
+                isReloading = false;
+                Thread.currentThread().interrupt();
+            }
+        });
     }
 
     private void setupMessages() {
