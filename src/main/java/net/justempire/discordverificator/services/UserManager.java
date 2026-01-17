@@ -10,18 +10,17 @@ import net.justempire.discordverificator.models.User;
 
 import java.io.File;
 import java.io.IOException;
-import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
-// Performs actions on users and loads/saves from/to SQLite
 public class UserManager {
     private final DatabaseService databaseService;
     private final Logger logger;
@@ -31,12 +30,9 @@ public class UserManager {
         this.databaseService = databaseService;
         this.jsonPath = jsonPath;
         this.logger = logger;
-
-        // Attempt migration on startup
         migrateFromJson();
     }
 
-    // --- MIGRATION LOGIC ---
     private void migrateFromJson() {
         File jsonFile = new File(jsonPath);
         if (!jsonFile.exists()) return;
@@ -46,35 +42,24 @@ public class UserManager {
         ObjectMapper mapper = new ObjectMapper();
         try {
             List<User> oldUsers = mapper.readValue(jsonFile, new TypeReference<List<User>>() {});
-
             int migratedCount = 0;
             for (User oldUser : oldUsers) {
                 try {
-                    // 1. Insert User
                     upsertUser(oldUser.getDiscordId(), oldUser.getCurrentAllowedIp());
-
-                    // 2. Insert Linked Accounts
                     for (String mcName : oldUser.linkedMinecraftUsernames) {
                         try {
                             linkUser(oldUser.getDiscordId(), mcName);
                         } catch (MinecraftUsernameAlreadyLinkedException ignored) {}
                     }
-
-                    // 3. Insert History (Best effort)
                     migratedCount++;
                 } catch (Exception e) { logger.warning("Failed to migrate user: " + oldUser.getDiscordId()); e.printStackTrace(); }
             }
-
-            // Rename JSON file so we don't migrate again
             File renamed = new File(jsonPath + ".old");
             jsonFile.renameTo(renamed);
             logger.info("Renamed users.json to users.json.old. Migrated " + migratedCount + " users.");
         } catch (IOException e) { e.printStackTrace(); }
     }
 
-    // --- CORE DATABASE METHODS ---
-
-    // Upsert: Update if exists, Insert if not
     private void upsertUser(String discordId, String currentIp) throws SQLException {
         String sql = "INSERT INTO users (discord_id, current_allowed_ip) VALUES(?, ?) " +
                 "ON CONFLICT(discord_id) DO UPDATE SET current_allowed_ip = ?";
@@ -109,21 +94,59 @@ public class UserManager {
             if (rs.next()) {
                 String id = rs.getString("discord_id");
                 String ip = rs.getString("current_allowed_ip");
+                boolean isBlocked = rs.getInt("is_blocked") == 1;
+                boolean allowSharedIp = rs.getInt("allow_shared_ip") == 1;
 
                 return new User(
                         id,
                         getLinkedAccounts(id),
                         null,
-                        ip
+                        ip,
+                        isBlocked,
+                        allowSharedIp
                 );
             }
         } catch (SQLException e) { e.printStackTrace(); }
         throw new UserNotFoundException();
     }
 
-    // --- /DVINFO COMMAND ---
+    // Check for other users with same IP
+    public List<String> getOtherDiscordIdsWithSameIp(String ip, String excludeDiscordId) {
+        List<String> ids = new ArrayList<>();
+        String sql = "SELECT discord_id FROM users WHERE current_allowed_ip = ? AND discord_id != ?";
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
+            pstmt.setString(1, ip);
+            pstmt.setString(2, excludeDiscordId);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                ids.add(rs.getString("discord_id"));
+            }
+        } catch (SQLException e) { e.printStackTrace(); }
+        return ids;
+    }
+
+    // Set Blocked Status
+    public void setUserBlocked(String discordId, boolean blocked) {
+        String sql = "UPDATE users SET is_blocked = ? WHERE discord_id = ?";
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
+            pstmt.setInt(1, blocked ? 1 : 0);
+            pstmt.setString(2, discordId);
+            pstmt.executeUpdate();
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+
+    // Set Allow Shared IP Status
+    public void setAllowSharedIp(String discordId, boolean allowed) {
+        String sql = "UPDATE users SET allow_shared_ip = ? WHERE discord_id = ?";
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
+            pstmt.setInt(1, allowed ? 1 : 0);
+            pstmt.setString(2, discordId);
+            pstmt.executeUpdate();
+        } catch (SQLException e) { e.printStackTrace(); }
+    }
+
     public Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {
-        String sql = "SELECT l.discord_id, l.last_login, u.current_allowed_ip " +
+        String sql = "SELECT l.discord_id, l.last_login, u.current_allowed_ip, u.is_blocked, u.allow_shared_ip " +
                 "FROM linked_accounts l " +
                 "JOIN users u ON l.discord_id = u.discord_id " +
                 "WHERE l.minecraft_username = ? COLLATE NOCASE";
@@ -136,6 +159,8 @@ public class UserManager {
                 Map<String, String> info = new HashMap<>();
                 info.put("discord_id", rs.getString("discord_id"));
                 info.put("current_ip", rs.getString("current_allowed_ip"));
+                info.put("is_blocked", rs.getInt("is_blocked") == 1 ? "Yes" : "No");
+                info.put("shared_ip_allowed", rs.getInt("allow_shared_ip") == 1 ? "Yes" : "No");
 
                 Timestamp lastLogin = rs.getTimestamp("last_login");
                 info.put("last_login", lastLogin != null ? lastLogin.toString() : "Never/Unknown");
@@ -146,7 +171,6 @@ public class UserManager {
         throw new UserNotFoundException();
     }
 
-    // --- UPDATING LOGIN TIME ---
     public void updatePlayerLoginTime(String minecraftUsername) {
         String sql = "UPDATE linked_accounts SET last_login = ? WHERE minecraft_username = ? COLLATE NOCASE";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
@@ -179,7 +203,7 @@ public class UserManager {
 
     public void linkUser(String discordId, String minecraftUsername) throws MinecraftUsernameAlreadyLinkedException {
         try {
-            upsertUser(discordId, ""); // Create if not exists with empty IP
+            upsertUser(discordId, "");
         } catch (SQLException e) { e.printStackTrace(); return; }
 
         String sql = "INSERT INTO linked_accounts (minecraft_username, discord_id) VALUES (?, ?)";
@@ -204,7 +228,6 @@ public class UserManager {
         } catch (SQLException e) { e.printStackTrace(); }
     }
 
-    // --- HISTORY / SPAM PREVENTION LOGIC ---
     public void updateLastTimeUserReceivedCode(String discordId, String ip) {
         String sql = "INSERT INTO verification_history (discord_id, ip_address, last_received) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
@@ -212,8 +235,6 @@ public class UserManager {
             pstmt.setString(2, ip);
             pstmt.setTimestamp(3, Timestamp.from(Instant.now()));
             pstmt.executeUpdate();
-
-            // "DELETE FROM verification_history WHERE last_received < date('now', '-1 day')"
         } catch (SQLException e) { e.printStackTrace(); }
     }
 

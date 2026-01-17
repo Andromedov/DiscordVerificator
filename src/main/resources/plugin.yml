@@ -16,6 +16,9 @@ commands:
   dvinfo:
     description: Check player info
     usage: dvinfo <Player>
+  dvdecision:
+    description: Internal command for handling alerts
+    usage: dvdecision <allow|block> <discordId>
 
 permissions:
   discordVerificator.link:
@@ -29,4 +32,7 @@ permissions:
     default: op
   discordVerificator.info:
     description: Allows to check info
+    default: op
+  discordVerificator.alerts:
+    description: Allows to handle alerts
     default: op

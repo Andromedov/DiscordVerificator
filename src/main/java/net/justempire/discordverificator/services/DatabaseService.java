@@ -29,6 +29,7 @@ public class DatabaseService {
     public void initialize() throws SQLException {
         getConnection(); // Ensure connection is established
         createTables();
+        performMigrations();
     }
 
     public synchronized Connection getConnection() throws SQLException {
@@ -51,7 +52,9 @@ public class DatabaseService {
     private void createTables() throws SQLException {
         String createUsersTable = "CREATE TABLE IF NOT EXISTS users (" +
                 "discord_id TEXT PRIMARY KEY, " +
-                "current_allowed_ip TEXT" +
+                "current_allowed_ip TEXT, " +
+                "is_blocked INTEGER DEFAULT 0, " +
+                "allow_shared_ip INTEGER DEFAULT 0" +
                 ");";
 
         String createLinksTable = "CREATE TABLE IF NOT EXISTS linked_accounts (" +
@@ -74,6 +77,23 @@ public class DatabaseService {
             stmt.execute(createUsersTable);
             stmt.execute(createLinksTable);
             stmt.execute(createHistoryTable);
+        }
+    }
+
+    // Simple migration to add columns if they don't exist in existing DBs
+    private void performMigrations() {
+        try (Statement stmt = getConnection().createStatement()) {
+            try {
+                stmt.execute("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;");
+                logger.info("Migrated database: Added is_blocked column.");
+            } catch (SQLException ignored) {}
+
+            try {
+                stmt.execute("ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0;");
+                logger.info("Migrated database: Added allow_shared_ip column.");
+            } catch (SQLException ignored) {}
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
     }
 }
