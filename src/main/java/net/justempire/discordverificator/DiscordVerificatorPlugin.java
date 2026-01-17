@@ -80,7 +80,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         getCommand("dvreload").setExecutor(reloadCommand);
 
         InfoCommand infoCommand = new InfoCommand(this, userManager);
-        getCommand("info").setExecutor(infoCommand);
+        getCommand("dvinfo").setExecutor(infoCommand);
 
         logger.info("Enabled successfully!");
     }

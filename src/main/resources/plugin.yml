@@ -13,9 +13,9 @@ commands:
     usage: unlink <Player>
   dvreload:
     description: Reload the plugin
-  info:
+  dvinfo:
     description: Check player info
-    usage: info <Player>
+    usage: dvinfo <Player>
 
 permissions:
   discordVerificator.link:

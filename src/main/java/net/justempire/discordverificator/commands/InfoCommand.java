@@ -29,7 +29,7 @@ public class InfoCommand implements CommandExecutor {
         }
 
         if (arguments.length != 1) {
-            commandSender.sendMessage(MessageColorizer.colorize("&cUsage: /info <player>"));
+            commandSender.sendMessage(MessageColorizer.colorize("&cUsage: /dvinfo <player>"));
             return true;
         }
 
