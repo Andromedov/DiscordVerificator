@@ -27,21 +27,30 @@ public class User {
     @JsonProperty("currentAllowedIp")
     private String currentAllowedIp;
 
-    // Empty constructor for Jackson to serialize/deserialize data from/to JSON
+    private boolean isBlocked;
+    private boolean allowSharedIp;
+
+    // Empty constructor for Jackson
     public User() { }
 
-    public User(String discordUsername, List<String> minecraftUsernames, List<LastTimeUserReceivedCode> latestVerificationsFromIps, String currentAllowedIp) {
+    public User(String discordUsername, List<String> minecraftUsernames, List<LastTimeUserReceivedCode> latestVerificationsFromIps, String currentAllowedIp, boolean isBlocked, boolean allowSharedIp) {
         this.discordId = discordUsername;
         this.linkedMinecraftUsernames = new ArrayList<>(minecraftUsernames);
         this.latestVerificationsFromIps = latestVerificationsFromIps;
         this.currentAllowedIp = currentAllowedIp;
+        this.isBlocked = isBlocked;
+        this.allowSharedIp = allowSharedIp;
+    }
+
+    @Deprecated
+    public User(String discordUsername, List<String> minecraftUsernames, List<LastTimeUserReceivedCode> latestVerificationsFromIps, String currentAllowedIp) {
+        this(discordUsername, minecraftUsernames, latestVerificationsFromIps, currentAllowedIp, false, false);
     }
 
     public void setCurrentAllowedIp(String currentAllowedIp) {
         this.currentAllowedIp = currentAllowedIp;
     }
 
-    // Method for updating last time user got a code from certain IP
     public void updateLastTimeUserReceivedCode(String ip) {
         if (latestVerificationsFromIps == null) latestVerificationsFromIps = new ArrayList<>();
 
@@ -53,20 +62,16 @@ public class User {
             return;
         }
 
-        // If not found, then create
         LastTimeUserReceivedCode verificationFromIp = new LastTimeUserReceivedCode(ip, now);
         latestVerificationsFromIps.add(verificationFromIp);
     }
 
-    // Method for getting last time user got a code from certain IP
-    // Used to be compared in order to create a delay between generating verification codes
     public Date getLastTimeUserReceivedCode(String ip) throws NoCodesFoundException {
         for (LastTimeUserReceivedCode verification : latestVerificationsFromIps) {
             if (verification.getIp().equalsIgnoreCase(ip))
                 return verification.getTimeOfReceiving();
         }
 
-        // Throwing exception if nothing found
         throw new NoCodesFoundException();
     }
 
@@ -76,6 +81,22 @@ public class User {
 
     public String getCurrentAllowedIp() {
         return currentAllowedIp;
+    }
+
+    public boolean isBlocked() {
+        return isBlocked;
+    }
+
+    public void setBlocked(boolean blocked) {
+        isBlocked = blocked;
+    }
+
+    public boolean isSharedIpAllowed() {
+        return allowSharedIp;
+    }
+
+    public void setAllowSharedIp(boolean allowSharedIp) {
+        this.allowSharedIp = allowSharedIp;
     }
 
     public boolean isMinecraftUsernameLinked(String username) {

@@ -3,10 +3,7 @@ package net.justempire.discordverificator;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
-import net.justempire.discordverificator.commands.InfoCommand;
-import net.justempire.discordverificator.commands.LinkCommand;
-import net.justempire.discordverificator.commands.ReloadCommand;
-import net.justempire.discordverificator.commands.UnlinkCommand;
+import net.justempire.discordverificator.commands.*;
 import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.listeners.JoinListener;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
@@ -32,18 +29,14 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     private JDA currentJDA;
     private static Map<String, String> messages = new HashMap<>();
 
-    // Flag to prevent double reloading
     private boolean isReloading = false;
 
     @Override
     public void onEnable() {
-        // Creating a config if it doesn't exist
         saveDefaultConfig();
 
-        // Setting up the logger
         logger = this.getLogger();
 
-        // Initialize Database Service
         databaseService = new DatabaseService(getDataFolder().getAbsolutePath(), logger);
         try {
             databaseService.initialize();
@@ -66,21 +59,14 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         // Setting up the bot
         setupBot();
 
-        // Setting up listeners
         getServer().getPluginManager().registerEvents(new JoinListener(this, userManager, confirmationCodeService), this);
 
-        // Setting up commands
-        LinkCommand linkCommand = new LinkCommand(this, userManager);
-        getCommand("link").setExecutor(linkCommand);
-
-        UnlinkCommand unlinkCommand = new UnlinkCommand(this, userManager);
-        getCommand("unlink").setExecutor(unlinkCommand);
-
-        ReloadCommand reloadCommand = new ReloadCommand(this);
-        getCommand("dvreload").setExecutor(reloadCommand);
-
-        InfoCommand infoCommand = new InfoCommand(this, userManager);
-        getCommand("dvinfo").setExecutor(infoCommand);
+        // Commands
+        getCommand("link").setExecutor(new LinkCommand(this, userManager));
+        getCommand("unlink").setExecutor(new UnlinkCommand(this, userManager));
+        getCommand("dvreload").setExecutor(new ReloadCommand(this));
+        getCommand("dvinfo").setExecutor(new InfoCommand(this, userManager));
+        getCommand("dvdecision").setExecutor(new DecisionCommand(this, userManager));
 
         logger.info("Enabled successfully!");
     }
@@ -127,7 +113,6 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             DiscordBot bot = new DiscordBot(this, logger, userManager, confirmationCodeService);
 
             try {
-                // Ensure old instance is cleaned up if this is a retry
                 if (this.currentJDA != null) {
                     this.currentJDA.shutdownNow();
                 }
@@ -138,7 +123,6 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                         .setStatus(OnlineStatus.ONLINE)
                         .build();
 
-                // Wait for the bot to be ready (safe because we are async)
                 this.currentJDA.awaitReady();
                 this.discordBot = bot;
 
@@ -156,10 +140,8 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
         logger.info("Reloading plugin...");
 
-        // Run reload logic asynchronously
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
             try {
-                // 1. Shutdown existing bot completely
                 if (currentJDA != null) {
                     currentJDA.shutdown();
                     if (!currentJDA.awaitShutdown(10, TimeUnit.SECONDS)) {
@@ -169,12 +151,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                     currentJDA = null;
                 }
 
-                // 2. Reload config (Sync task required for Bukkit API safety)
                 getServer().getScheduler().runTask(this, () -> {
                     reloadConfig();
                     setupMessages();
 
-                    // 3. Start new bot (Async inside setupBot)
                     setupBot();
 
                     isReloading = false;
@@ -191,11 +171,8 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
     private void setupMessages() {
         messages = new HashMap<>();
-
-        // Getting the messages from the config
         ConfigurationSection configSection = getConfig().getConfigurationSection("messages");
         if (configSection != null) {
-            // Adding these messages to dictionary
             Map<String, Object> messages = configSection.getValues(true);
             for (Map.Entry<String, Object> pair : messages.entrySet()) {
                 DiscordVerificatorPlugin.messages.put(pair.getKey(), pair.getValue().toString());
@@ -205,7 +182,6 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         saveDefaultConfig();
     }
 
-    // Returns a message from the config by key
     public static String getMessage(String key) {
         if (messages == null) return String.format("Message %s wasn't found (messages list is null)", key);
         if (messages.get(key) == null) return String.format("Message %s wasn't found", key);
