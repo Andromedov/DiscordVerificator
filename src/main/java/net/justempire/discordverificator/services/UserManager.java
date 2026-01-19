@@ -121,7 +121,7 @@ public class UserManager {
         throw new UserNotFoundException();
     }
 
-    // --- /INFO COMMAND ---
+    // --- /DVINFO COMMAND ---
     public Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {
         String sql = "SELECT l.discord_id, l.last_login, u.current_allowed_ip " +
                 "FROM linked_accounts l " +
