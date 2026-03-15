@@ -39,6 +39,7 @@ To join the server, the player should run the seen command to the **Discord bot*
 ## 💻 Commands
 - `/link <player> <discordId>` — links the player to its Discord profile. ([how to get discord id?](https://youtu.be/RzTWH0g2xbo?si=oQT2rCSuf6B3Z5kY))
 - `/unlink <player>` — unlinks the player from its Discord profile.
+- `/relink <old_player> <new_player>` — relinks the player from its minecraft username to another one.
 - `/dvreload` — reloads the plugin (_including Discord bot_).
 - `/dvinfo <player>` — shows information about the player.
   
@@ -61,13 +62,24 @@ To join the server, the player should run the seen command to the **Discord bot*
 # 5. Give your players access to send a command to the bot (e.g., invite it to your Discord server)
 token: "DISCORD_BOT_TOKEN"
 
+# Global limit for how many accounts can play from one IP address
+# Note: You can override this for specific users using /dvdecision allow <discordId | playerName> <amount>
+default-max-accounts-per-ip: 1
+
+# If configured, multi-account alerts will be sent directly to your Discord staff channel
+discord-alerts:
+  channel-id: "" # E.g., "123456789012345678"
+  admin-role-id: "" # The role ID required to click "Allow" / "Block" buttons
+
 messages:
   "not-enough-permissions": "&cNot enough permissions!"
   "invalid-link-format": "&cInvalid format! Please use: /link <player> <discordId>"
   "invalid-unlink-format": "&cInvalid format! Please use: /unlink <player>"
+  "invalid-relink-format": "&cInvalid format! Please use: /relink <old_player> <new_player>"
   "invalid-user-id-format": "&cInvalid Discord ID format!"
   "successfully-linked": "&aSuccessfully linked!"
   "successfully-unlinked": "&aSuccessfully unlinked!"
+  "successfully-relinked": "&aSuccessfully relinked to the new username!"
   "player-already-linked": "&cThis player is already linked!"
   "player-was-not-linked": "&cThis player was never linked!"
   "account-not-linked": "&cYour account is not linked to a Discord profile yet."
@@ -87,6 +99,16 @@ messages:
   "user-not-found": "User not found!"
   "user-not-found-description": "It seems like your account hasn't been linked to any Minecraft username yet."
   "reloaded": "&#14C60D[DiscordVerificator] Reloaded!"
+  "account-blocked": "&cYour account has been blocked by an administrator."
+  "security-check": "&cSecurity check triggered. Please wait for administrator approval."
+  "admin-alert-multi-ip": "&c&l[Security] &fMulti-account detected for &e%s&f (IP: %s) shared with &7%s&f."
+  "admin-alert-blocked-assoc": "&c&l[Security] &fUser &e%s&f is connecting from an IP associated with BLOCKED user &7%s&f."
+  "button-allow": "&a[ALLOW]"
+  "button-block": "&c[BLOCK]"
+  "hover-allow": "&7Click to allow this user to share this IP."
+  "hover-block": "&7Click to block this user."
+  "action-success": "&aAction completed successfully."
+  "action-failed": "&cFailed to execute action."
 ```
 
 ## ☂ Getting started
