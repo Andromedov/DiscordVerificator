@@ -18,11 +18,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class DiscordVerificatorPlugin extends JavaPlugin {
     private Logger logger;
-    private DatabaseService databaseService;
     private UserManager userManager;
     private ConfirmationCodeService confirmationCodeService;
     private DiscordBot discordBot;
@@ -38,12 +38,11 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
         logger = this.getLogger();
 
-        databaseService = new DatabaseService(getDataFolder().getAbsolutePath(), logger);
+        DatabaseService databaseService = new DatabaseService(getDataFolder().getAbsolutePath(), logger);
         try {
             databaseService.initialize();
         } catch (SQLException e) {
-            logger.severe("Could not initialize database! Disabling plugin.");
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "Could not initialize database! Disabling plugin.", e);
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
@@ -134,8 +133,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
                 logger.info("Discord Bot connected and ready!");
             } catch (Exception e) {
-                logger.severe("Failed to connect to Discord! Check your token or internet connection.");
-                e.printStackTrace();
+                logger.log(Level.SEVERE, "Failed to connect to Discord! Check your token or internet connection.", e);
             }
         });
     }

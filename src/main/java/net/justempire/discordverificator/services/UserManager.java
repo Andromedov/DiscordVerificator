@@ -19,8 +19,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
+@SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection"})
 public class UserManager {
     private final DatabaseService databaseService;
     private final Logger logger;
@@ -39,17 +41,24 @@ public class UserManager {
 
         ObjectMapper mapper = new ObjectMapper();
         try {
-            List<User> oldUsers = mapper.readValue(jsonFile, new TypeReference<List<User>>() {});
+            List<User> oldUsers = mapper.readValue(jsonFile, new TypeReference<>() {});
             for (User oldUser : oldUsers) {
                 try {
                     upsertUser(oldUser.getDiscordId(), oldUser.getCurrentAllowedIp());
                     for (String mcName : oldUser.linkedMinecraftUsernames) {
                         try { linkUser(oldUser.getDiscordId(), mcName); } catch (Exception ignored) {}
                     }
-                } catch (Exception e) {}
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Error migrating user data for: " + oldUser.getDiscordId(), e);
+                }
             }
-            jsonFile.renameTo(new File(jsonPath + ".old"));
-        } catch (IOException e) { e.printStackTrace(); }
+            boolean renamed = jsonFile.renameTo(new File(jsonPath + ".old"));
+            if (!renamed) {
+                logger.warning("Failed to rename users.json to users.json.old");
+            }
+        } catch (IOException e) {
+            logger.log(Level.SEVERE, "Failed to read users.json", e);
+        }
     }
 
     private void upsertUser(String discordId, String currentIp) throws SQLException {
@@ -69,7 +78,9 @@ public class UserManager {
             pstmt.setString(1, minecraftUsername);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) return rs.getString("discord_id");
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Database error", e);
+        }
         throw new UserNotFoundException();
     }
 
@@ -87,11 +98,11 @@ public class UserManager {
 
                 return new User(id, getLinkedAccounts(id), null, ip, isBlocked, allowSharedIp);
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         throw new UserNotFoundException();
     }
 
-    // Check for other users with same IP in historical database!
+    // Check for other users with the same IP in the historical database!
     public List<String> getOtherDiscordIdsWithSameIp(String ip, String excludeDiscordId) {
         List<String> ids = new ArrayList<>();
         String sql = "SELECT DISTINCT discord_id FROM user_ips WHERE ip_address = ? AND discord_id != ?";
@@ -100,7 +111,7 @@ public class UserManager {
             pstmt.setString(2, excludeDiscordId);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) ids.add(rs.getString("discord_id"));
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         return ids;
     }
 
@@ -117,14 +128,14 @@ public class UserManager {
             if (i < discordIds.size() - 1) placeholders.append(",");
         }
 
-        String sql = "SELECT minecraft_username FROM linked_accounts WHERE discord_id IN (" + placeholders.toString() + ")";
+        String sql = "SELECT minecraft_username FROM linked_accounts WHERE discord_id IN (" + placeholders + ")";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             for (int i = 0; i < discordIds.size(); i++) {
                 pstmt.setString(i + 1, discordIds.get(i));
             }
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) usernames.add(rs.getString("minecraft_username"));
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         return usernames;
     }
 
@@ -135,7 +146,7 @@ public class UserManager {
             pstmt.setInt(1, blocked ? 1 : 0);
             pstmt.setString(2, discordId);
             pstmt.executeUpdate();
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
     // Set Allow Shared IP Status
@@ -145,7 +156,7 @@ public class UserManager {
             pstmt.setInt(1, allowed ? 1 : 0);
             pstmt.setString(2, discordId);
             pstmt.executeUpdate();
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
     public Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {
@@ -173,7 +184,7 @@ public class UserManager {
 
                 return info;
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         throw new UserNotFoundException();
     }
 
@@ -183,7 +194,7 @@ public class UserManager {
             pstmt.setTimestamp(1, Timestamp.from(Instant.now()));
             pstmt.setString(2, minecraftUsername);
             pstmt.executeUpdate();
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
 
         // Record successful IP login in user_ips table
         try {
@@ -197,17 +208,17 @@ public class UserManager {
                 pstmt.setTimestamp(4, now);
                 pstmt.executeUpdate();
             }
-        } catch (UserNotFoundException | SQLException e) { e.printStackTrace(); }
+        } catch (UserNotFoundException | SQLException e) { logger.log(Level.SEVERE, "Database error or UserNotFound", e); }
     }
 
     private List<String> getLinkedAccounts(String discordId) {
-        List<String> accounts = new java.util.ArrayList<>();
+        List<String> accounts = new ArrayList<>();
         String sql = "SELECT minecraft_username FROM linked_accounts WHERE discord_id = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) { accounts.add(rs.getString("minecraft_username")); }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         return accounts;
     }
 
@@ -218,7 +229,7 @@ public class UserManager {
             pstmt.setString(2, discordId);
             int affected = pstmt.executeUpdate();
             if (affected == 0) throw new UserNotFoundException();
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
 
         // Also track this newly verified IP in the history
         String sqlIps = "INSERT INTO user_ips (discord_id, ip_address, last_seen) VALUES (?, ?, ?) ON CONFLICT(discord_id, ip_address) DO UPDATE SET last_seen = ?";
@@ -229,7 +240,7 @@ public class UserManager {
             pstmt.setTimestamp(3, now);
             pstmt.setTimestamp(4, now);
             pstmt.executeUpdate();
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
     public void linkUser(String discordId, String minecraftUsername) throws MinecraftUsernameAlreadyLinkedException {
@@ -245,7 +256,7 @@ public class UserManager {
             if (e.getMessage().contains("PRIMARY KEY") || e.getMessage().contains("constraint")) {
                 throw new MinecraftUsernameAlreadyLinkedException();
             }
-            e.printStackTrace();
+            logger.log(Level.SEVERE, "Database error", e);
         }
     }
 
@@ -255,13 +266,13 @@ public class UserManager {
             pstmt.setString(1, minecraftUsername);
             int rows = pstmt.executeUpdate();
             if (rows == 0) throw new NotFoundException();
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
     public void relinkUser(String oldUsername, String newUsername) throws UserNotFoundException, MinecraftUsernameAlreadyLinkedException {
-        String discordId = null;
-        Timestamp linkedAt = null;
-        Timestamp lastLogin = null;
+        String discordId;
+        Timestamp linkedAt;
+        Timestamp lastLogin;
 
         String sqlSelect = "SELECT discord_id, linked_at, last_login FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
         // Retrieves user linkage data or throws not found exception
@@ -273,7 +284,10 @@ public class UserManager {
                 linkedAt = rs.getTimestamp("linked_at");
                 lastLogin = rs.getTimestamp("last_login");
             } else throw new UserNotFoundException();
-        } catch (SQLException e) { throw new UserNotFoundException(); }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Database error", e);
+            throw new UserNotFoundException();
+        }
 
         String sqlCheck = "SELECT discord_id FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlCheck)) {
@@ -281,7 +295,7 @@ public class UserManager {
             pstmt.setString(1, newUsername);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) throw new MinecraftUsernameAlreadyLinkedException();
-        } catch (SQLException ignored) {}
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
 
         try { unlinkUser(oldUsername); } catch (NotFoundException e) { throw new UserNotFoundException(); }
 
@@ -295,6 +309,7 @@ public class UserManager {
             pstmt.executeUpdate();
         } catch (SQLException e) {
             if (e.getMessage().contains("PRIMARY KEY") || e.getMessage().contains("constraint")) throw new MinecraftUsernameAlreadyLinkedException();
+            logger.log(Level.SEVERE, "Database error", e);
         }
     }
 
@@ -305,7 +320,7 @@ public class UserManager {
             pstmt.setString(2, ip);
             pstmt.setTimestamp(3, Timestamp.from(Instant.now()));
             pstmt.executeUpdate();
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
     public long getSecondsSinceLastCode(String discordId, String ip) throws NoCodesFoundException {
@@ -318,7 +333,7 @@ public class UserManager {
                 Timestamp last = rs.getTimestamp("last_received");
                 return java.time.Duration.between(last.toInstant(), Instant.now()).getSeconds();
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         throw new NoCodesFoundException();
     }
 

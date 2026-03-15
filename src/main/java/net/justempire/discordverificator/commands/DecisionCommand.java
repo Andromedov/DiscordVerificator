@@ -10,6 +10,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.logging.Level;
+
 public class DecisionCommand implements CommandExecutor {
     private final UserManager userManager;
     private final DiscordVerificatorPlugin plugin;
@@ -53,7 +55,7 @@ public class DecisionCommand implements CommandExecutor {
                 }
             } catch (Exception e) {
                 sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("action-failed")));
-                e.printStackTrace();
+                plugin.getLogger().log(Level.SEVERE, "Failed to execute decision command", e);
             }
         });
 

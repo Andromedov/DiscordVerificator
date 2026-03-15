@@ -2,8 +2,10 @@ package net.justempire.discordverificator.services;
 
 import java.io.File;
 import java.sql.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
+@SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection", "SqlDialectInspection"})
 public class DatabaseService {
     private final String url;
     private final Logger logger;
@@ -15,12 +17,9 @@ public class DatabaseService {
         this.url = "jdbc:sqlite:" + dataFolder + File.separator + "database.db";
 
         try {
-            // Load driver explicitely to ensure it's available
+            // Load driver explicitly to ensure it's available
             Class.forName("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            logger.severe("SQLite JDBC Driver not found!");
-            e.printStackTrace();
-        }
+        } catch (ClassNotFoundException e) { this.logger.log(Level.SEVERE, "SQLite JDBC Driver not found!", e); }
     }
 
     public void initialize() throws SQLException {
@@ -41,9 +40,7 @@ public class DatabaseService {
             if (connection != null && !connection.isClosed()) {
                 connection.close();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Failed to close database connection", e); }
     }
 
     private void createTables() throws SQLException {
@@ -110,8 +107,6 @@ public class DatabaseService {
                         "WHERE current_allowed_ip IS NOT NULL AND current_allowed_ip != '';");
             } catch (SQLException ignored) {}
 
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Failed to perform database migrations", e); }
     }
 }

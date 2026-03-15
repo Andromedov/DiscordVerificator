@@ -2,15 +2,8 @@ package net.justempire.discordverificator.models;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import net.justempire.discordverificator.exceptions.MinecraftUsernameAlreadyLinkedException;
-import net.justempire.discordverificator.exceptions.NoCodesFoundException;
-import net.justempire.discordverificator.exceptions.NotFoundException;
 
-import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
-import java.util.Date;
-import java.util.Iterator;
 import java.util.List;
 
 @JsonAutoDetect
@@ -42,34 +35,6 @@ public class User {
         this.allowSharedIp = allowSharedIp;
     }
 
-    public void setCurrentAllowedIp(String currentAllowedIp) {
-        this.currentAllowedIp = currentAllowedIp;
-    }
-
-    public void updateLastTimeUserReceivedCode(String ip) {
-        if (latestVerificationsFromIps == null) latestVerificationsFromIps = new ArrayList<>();
-
-        Date now = Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant());
-        for (LastTimeUserReceivedCode verification : latestVerificationsFromIps) {
-            if (!ip.equalsIgnoreCase(verification.getIp())) continue;
-
-            verification.setTimeOfReceiving(now);
-            return;
-        }
-
-        LastTimeUserReceivedCode verificationFromIp = new LastTimeUserReceivedCode(ip, now);
-        latestVerificationsFromIps.add(verificationFromIp);
-    }
-
-    public Date getLastTimeUserReceivedCode(String ip) throws NoCodesFoundException {
-        for (LastTimeUserReceivedCode verification : latestVerificationsFromIps) {
-            if (verification.getIp().equalsIgnoreCase(ip))
-                return verification.getTimeOfReceiving();
-        }
-
-        throw new NoCodesFoundException();
-    }
-
     public String getDiscordId() {
         return discordId;
     }
@@ -82,45 +47,7 @@ public class User {
         return isBlocked;
     }
 
-    public void setBlocked(boolean blocked) {
-        isBlocked = blocked;
-    }
-
     public boolean isSharedIpAllowed() {
         return allowSharedIp;
-    }
-
-    public void setAllowSharedIp(boolean allowSharedIp) {
-        this.allowSharedIp = allowSharedIp;
-    }
-
-    public boolean isMinecraftUsernameLinked(String username) {
-        for (String linkedName : linkedMinecraftUsernames) {
-            if (linkedName.equalsIgnoreCase(username)) return true;
-        }
-
-        return false;
-    }
-
-    public void linkMinecraftUsername(String username) throws MinecraftUsernameAlreadyLinkedException {
-        for (String linkedName : linkedMinecraftUsernames) {
-            if (linkedName.equalsIgnoreCase(username))
-                throw new MinecraftUsernameAlreadyLinkedException();
-        }
-
-        linkedMinecraftUsernames.add(username);
-    }
-
-    public void unlinkMinecraftUsername(String username) throws NotFoundException {
-        Iterator<String> iterator = linkedMinecraftUsernames.iterator();
-        while (iterator.hasNext()) {
-            String linkedName = iterator.next();
-            if (linkedName.equalsIgnoreCase(username)) {
-                currentAllowedIp = "";
-                iterator.remove();
-                return;
-            }
-        }
-        throw new NotFoundException();
     }
 }

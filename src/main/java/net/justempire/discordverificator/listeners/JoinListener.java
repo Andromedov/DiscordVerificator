@@ -8,7 +8,7 @@ import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import net.md_5.bungee.api.chat.ClickEvent;
-import net.md_5.bungee.api.chat.ComponentBuilder;
+import net.md_5.bungee.api.chat.hover.content.Text;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
 import org.bukkit.Bukkit;
@@ -127,11 +127,11 @@ public class JoinListener implements Listener {
 
         TextComponent btnAllow = new TextComponent(MessageColorizer.colorize(getMessage("button-allow") + " "));
         btnAllow.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/dvdecision allow " + currentDiscordId));
-        btnAllow.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder(MessageColorizer.colorize(getMessage("hover-allow"))).create()));
+        btnAllow.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(MessageColorizer.colorize(getMessage("hover-allow")))));
 
         TextComponent btnBlock = new TextComponent(MessageColorizer.colorize(getMessage("button-block")));
         btnBlock.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/dvdecision block " + currentDiscordId));
-        btnBlock.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new ComponentBuilder(MessageColorizer.colorize(getMessage("hover-block"))).create()));
+        btnBlock.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(MessageColorizer.colorize(getMessage("hover-block")))));
 
         alert.addExtra(btnAllow);
         alert.addExtra(btnBlock);
