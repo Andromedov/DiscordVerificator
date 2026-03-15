@@ -61,6 +61,7 @@ public class DatabaseService {
                 "minecraft_username TEXT PRIMARY KEY, " +
                 "discord_id TEXT NOT NULL, " +
                 "last_login TIMESTAMP, " +
+                "linked_at TIMESTAMP, " +
                 "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
                 ");";
 
@@ -73,10 +74,20 @@ public class DatabaseService {
                 "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
                 ");";
 
+        // Table to track all historical IPs verified by the user (for multi-account detection)
+        String createUserIpsTable = "CREATE TABLE IF NOT EXISTS user_ips (" +
+                "discord_id TEXT, " +
+                "ip_address TEXT, " +
+                "last_seen TIMESTAMP, " +
+                "PRIMARY KEY (discord_id, ip_address), " +
+                "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
+                ");";
+
         try (Statement stmt = getConnection().createStatement()) {
             stmt.execute(createUsersTable);
             stmt.execute(createLinksTable);
             stmt.execute(createHistoryTable);
+            stmt.execute(createUserIpsTable);
         }
     }
 
@@ -92,6 +103,28 @@ public class DatabaseService {
                 stmt.execute("ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0;");
                 logger.info("Migrated database: Added allow_shared_ip column.");
             } catch (SQLException ignored) {}
+
+            try {
+                stmt.execute("ALTER TABLE linked_accounts ADD COLUMN linked_at TIMESTAMP;");
+                logger.info("Migrated database: Added linked_at column.");
+            } catch (SQLException ignored) {}
+
+            // Create user_ips table if not exists (already in createTables, but good to ensure during migration)
+            stmt.execute("CREATE TABLE IF NOT EXISTS user_ips (" +
+                    "discord_id TEXT, " +
+                    "ip_address TEXT, " +
+                    "last_seen TIMESTAMP, " +
+                    "PRIMARY KEY (discord_id, ip_address), " +
+                    "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
+                    ");");
+
+            // Backfill existing IPs into the history
+            try {
+                stmt.execute("INSERT OR IGNORE INTO user_ips (discord_id, ip_address, last_seen) " +
+                        "SELECT discord_id, current_allowed_ip, CURRENT_TIMESTAMP FROM users " +
+                        "WHERE current_allowed_ip IS NOT NULL AND current_allowed_ip != '';");
+            } catch (SQLException ignored) {}
+
         } catch (SQLException e) {
             e.printStackTrace();
         }

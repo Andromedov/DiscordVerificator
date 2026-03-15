@@ -105,7 +105,7 @@ public class JoinListener implements Listener {
 
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
                     String.format(DiscordVerificatorPlugin.getMessage("confirm-with-command"), code));
-        } else { userManager.updatePlayerLoginTime(playerName); }
+        } else { userManager.updatePlayerLoginTime(playerName, ipAddress); }
     }
 
     private void sendAdminAlertMultiIp(String playerName, String ip, List<String> others, String currentDiscordId) {
