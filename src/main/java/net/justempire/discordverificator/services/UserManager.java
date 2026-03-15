@@ -125,6 +125,34 @@ public class UserManager {
         return ids;
     }
 
+    /**
+     * Fetches usernames by Discord IDs with null/empty handling
+     */
+    public List<String> getMinecraftUsernamesByDiscordIds(List<String> discordIds) {
+        List<String> usernames = new ArrayList<>();
+        if (discordIds == null || discordIds.isEmpty()) return usernames;
+
+        StringBuilder placeholders = new StringBuilder();
+        for (int i = 0; i < discordIds.size(); i++) {
+            placeholders.append("?");
+            if (i < discordIds.size() - 1) placeholders.append(",");
+        }
+
+        String sql = "SELECT minecraft_username FROM linked_accounts WHERE discord_id IN (" + placeholders.toString() + ")";
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
+            for (int i = 0; i < discordIds.size(); i++) {
+                pstmt.setString(i + 1, discordIds.get(i));
+            }
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                usernames.add(rs.getString("minecraft_username"));
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return usernames;
+    }
+
     // Set Blocked Status
     public void setUserBlocked(String discordId, boolean blocked) {
         String sql = "UPDATE users SET is_blocked = ? WHERE discord_id = ?";
