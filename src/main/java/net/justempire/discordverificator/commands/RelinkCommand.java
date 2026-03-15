@@ -1,6 +1,7 @@
 package net.justempire.discordverificator.commands;
 
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
+import net.justempire.discordverificator.exceptions.MinecraftUsernameAlreadyLinkedException;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
@@ -10,45 +11,38 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 
-import java.util.Map;
-
-public class InfoCommand implements CommandExecutor {
+public class RelinkCommand implements CommandExecutor {
     private final UserManager userManager;
     private final DiscordVerificatorPlugin plugin;
 
-    public InfoCommand(DiscordVerificatorPlugin plugin, UserManager userManager) {
+    public RelinkCommand(DiscordVerificatorPlugin plugin, UserManager userManager) {
         this.plugin = plugin;
         this.userManager = userManager;
     }
 
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] arguments) {
-        if (!commandSender.hasPermission("discordVerificator.info")) {
+        if (!commandSender.hasPermission("discordVerificator.relink")) {
             commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("not-enough-permissions")));
             return true;
         }
 
-        if (arguments.length != 1) {
-            commandSender.sendMessage(MessageColorizer.colorize("&cUsage: /dvinfo <player>"));
+        if (arguments.length != 2) {
+            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("invalid-relink-format")));
             return true;
         }
 
-        String targetPlayer = arguments[0];
+        String oldPlayerName = arguments[0];
+        String newPlayerName = arguments[1];
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                Map<String, String> info = userManager.getPlayerInfo(targetPlayer);
-
-                commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
-                commandSender.sendMessage(MessageColorizer.colorize("&6&l Info for: &f" + targetPlayer));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 Discord ID: &f" + info.get("discord_id")));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 Allowed IP: &f" + info.get("current_ip")));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 First Linked: &f" + info.get("linked_at")));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 Last Login: &f" + info.get("last_login")));
-                commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
-
+                userManager.relinkUser(oldPlayerName, newPlayerName);
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("successfully-relinked")));
             } catch (UserNotFoundException e) {
                 commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("player-was-not-linked")));
+            } catch (MinecraftUsernameAlreadyLinkedException e) {
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("player-already-linked")));
             } catch (Exception e) {
                 commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("error-occurred")));
                 e.printStackTrace();

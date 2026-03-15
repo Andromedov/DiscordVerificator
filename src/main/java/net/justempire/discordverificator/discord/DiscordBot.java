@@ -1,8 +1,12 @@
 package net.justempire.discordverificator.discord;
 
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -19,6 +23,9 @@ import net.justempire.discordverificator.services.UserManager;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 
+import java.awt.Color;
+import java.util.List;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class DiscordBot extends ListenerAdapter {
@@ -59,6 +66,65 @@ public class DiscordBot extends ListenerAdapter {
     public void onSlashCommandInteraction(@NotNull SlashCommandInteractionEvent event) {
         // If command is "confirm"
         if (event.getName().equals("confirm")) onConfirmSlashCommand(event);
+    }
+
+    @Override
+    public void onButtonInteraction(@NotNull ButtonInteractionEvent event) {
+        String id = event.getComponentId();
+        if (!id.startsWith("dv_")) return;
+
+        String adminRoleId = plugin.getConfig().getString("discord-alerts.admin-role-id");
+        if (adminRoleId != null && !adminRoleId.isEmpty()) {
+            if (event.getMember() == null || event.getMember().getRoles().stream().noneMatch(r -> r.getId().equals(adminRoleId))) {
+                event.reply("❌ You do not have permission to use this!").setEphemeral(true).queue();
+                return;
+            }
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (id.startsWith("dv_allow_")) {
+                String targetDiscordId = id.substring("dv_allow_".length());
+                userManager.setAllowSharedIp(targetDiscordId, true); // Довіряємо акаунту
+                event.reply("✅ Successfully marked user (Discord ID: " + targetDiscordId + ") as Trusted Bypass.").queue();
+                event.getMessage().editMessageComponents().queue();
+            } else if (id.startsWith("dv_block_")) {
+                String targetDiscordId = id.substring("dv_block_".length());
+                userManager.setUserBlocked(targetDiscordId, true);
+                event.reply("🛑 Successfully blocked user (Discord ID: " + targetDiscordId + ").").queue();
+                event.getMessage().editMessageComponents().queue();
+            }
+        });
+    }
+
+    /**
+     * Sends multi-account security alert with interactive response buttons
+     */
+    public void sendSecurityAlert(String playerName, String ip, List<String> associatedUsernames, String targetDiscordId) {
+        if (plugin.getJDA() == null) return;
+
+        String channelId = plugin.getConfig().getString("discord-alerts.channel-id");
+        if (channelId == null || channelId.isEmpty()) return;
+
+        TextChannel channel = plugin.getJDA().getTextChannelById(channelId);
+        if (channel == null) {
+            logger.warning("Could not find Discord channel for alerts! Check your config.");
+            return;
+        }
+
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle("⚠️ Security Alert: Multi-Account Detected");
+        embed.setColor(Color.ORANGE);
+        embed.setDescription("**Player Attempting to Join:** `" + playerName + "`\n" +
+                "**IP Address:** `" + ip + "`\n" +
+                "**Discord ID:** `" + targetDiscordId + "`\n\n" +
+                "**Associated Minecraft Accounts (same IP):**\n" + String.join(", ", associatedUsernames));
+
+        // Sends security alert embed with interactive trust/block buttons
+        channel.sendMessageEmbeds(embed.build())
+                .setComponents(ActionRow.of(
+                        Button.success("dv_allow_" + targetDiscordId, "Trust User (Bypass)"),
+                        Button.danger("dv_block_" + targetDiscordId, "Block User")
+                )).queue();
     }
 
     private void onConfirmSlashCommand(@NotNull SlashCommandInteractionEvent event) {
@@ -112,8 +178,7 @@ public class DiscordBot extends ListenerAdapter {
                     event.getHook().sendMessageEmbeds(embed).queue();
                 }
             } catch (Exception e) {
-                // Catch unexpected errors to prevent silent failures
-                e.printStackTrace();
+                logger.log(Level.SEVERE, "An internal error occurred during confirm command", e);
                 event.getHook().sendMessage("An internal error occurred.").queue();
             }
         });
