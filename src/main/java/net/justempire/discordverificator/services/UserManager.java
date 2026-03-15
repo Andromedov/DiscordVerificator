@@ -257,6 +257,62 @@ public class UserManager {
         } catch (SQLException e) { e.printStackTrace(); }
     }
 
+    public void relinkUser(String oldUsername, String newUsername) throws UserNotFoundException, MinecraftUsernameAlreadyLinkedException {
+        String discordId = null;
+        Timestamp linkedAt = null;
+        Timestamp lastLogin = null;
+
+        String sqlSelect = "SELECT discord_id, linked_at, last_login FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
+        // Retrieves user linkage data or throws not found exception
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlSelect)) {
+            pstmt.setString(1, oldUsername);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                discordId = rs.getString("discord_id");
+                linkedAt = rs.getTimestamp("linked_at");
+                lastLogin = rs.getTimestamp("last_login");
+            } else {
+                throw new UserNotFoundException();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw new UserNotFoundException();
+        }
+
+        String sqlCheck = "SELECT discord_id FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlCheck)) {
+        // Verifies new username availability or throws MinecraftUsernameAlreadyLinkedException
+            pstmt.setString(1, newUsername);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                throw new MinecraftUsernameAlreadyLinkedException();
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        try {
+            unlinkUser(oldUsername);
+        } catch (NotFoundException e) {
+            throw new UserNotFoundException();
+        }
+
+        String sqlInsert = "INSERT INTO linked_accounts (minecraft_username, discord_id, linked_at, last_login) VALUES (?, ?, ?, ?)";
+        // Inserts linked account record; throws targeted exceptions on primary key or constraint violations
+        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlInsert)) {
+            pstmt.setString(1, newUsername);
+            pstmt.setString(2, discordId);
+            pstmt.setTimestamp(3, linkedAt != null ? linkedAt : Timestamp.from(Instant.now()));
+            pstmt.setTimestamp(4, lastLogin);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            if (e.getMessage().contains("PRIMARY KEY") || e.getMessage().contains("constraint")) {
+                throw new MinecraftUsernameAlreadyLinkedException();
+            }
+            e.printStackTrace();
+        }
+    }
+
     public void updateLastTimeUserReceivedCode(String discordId, String ip) {
         String sql = "INSERT INTO verification_history (discord_id, ip_address, last_received) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {

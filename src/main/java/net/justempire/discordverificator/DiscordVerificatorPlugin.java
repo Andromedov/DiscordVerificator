@@ -16,6 +16,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
@@ -62,11 +63,12 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new JoinListener(this, userManager, confirmationCodeService), this);
 
         // Commands
-        getCommand("link").setExecutor(new LinkCommand(this, userManager));
-        getCommand("unlink").setExecutor(new UnlinkCommand(this, userManager));
-        getCommand("dvreload").setExecutor(new ReloadCommand(this));
-        getCommand("dvinfo").setExecutor(new InfoCommand(this, userManager));
-        getCommand("dvdecision").setExecutor(new DecisionCommand(this, userManager));
+        Objects.requireNonNull(getCommand("link")).setExecutor(new LinkCommand(this, userManager));
+        Objects.requireNonNull(getCommand("unlink")).setExecutor(new UnlinkCommand(this, userManager));
+        Objects.requireNonNull(getCommand("relink")).setExecutor(new RelinkCommand(this, userManager));
+        Objects.requireNonNull(getCommand("dvreload")).setExecutor(new ReloadCommand(this));
+        Objects.requireNonNull(getCommand("dvinfo")).setExecutor(new InfoCommand(this, userManager));
+        Objects.requireNonNull(getCommand("dvdecision")).setExecutor(new DecisionCommand(this, userManager));
 
         logger.info("Enabled successfully!");
     }

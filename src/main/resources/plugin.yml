@@ -11,6 +11,9 @@ commands:
   unlink:
     description: Unlink player from Discord
     usage: unlink <Player>
+  relink:
+    description: Relink an existing player to a new username
+    usage: relink <Old Player Name> <New Player Name>
   dvreload:
     description: Reload the plugin
   dvinfo:
@@ -26,6 +29,9 @@ permissions:
     default: op
   discordVerificator.unlink:
     description: Allows to unlink player from Discord profile
+    default: op
+  discordVerificator.relink:
+    description: Allows to relink player to a new username
     default: op
   discordVerificator.reload:
     description: Allows to reload the plugin
