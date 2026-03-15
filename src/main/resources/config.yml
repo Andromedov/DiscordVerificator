@@ -5,6 +5,15 @@
 # 5. Give your players access to send a command to the bot (e.g., invite it to your Discord server)
 token: "DISCORD_BOT_TOKEN"
 
+# Global limit for how many accounts can play from one IP address
+# Note: You can override this for specific users using /dvdecision allow <discordId | playerName> <amount>
+default-max-accounts-per-ip: 1
+
+# If configured, multi-account alerts will be sent directly to your Discord staff channel
+discord-alerts:
+  channel-id: "" # E.g., "123456789012345678"
+  admin-role-id: "" # The role ID required to click "Allow" / "Block" buttons
+
 messages:
   "not-enough-permissions": "&cNot enough permissions!"
   "invalid-link-format": "&cInvalid format! Please use: /link <player> <discordId>"

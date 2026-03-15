@@ -76,19 +76,30 @@ public class JoinListener implements Listener {
             }
 
             if (blockedAssociationFound) {
-                sendAdminAlertBlockedAssociation(playerName, blockedNeighborId);
+                List<String> blockedUsernames = userManager.getMinecraftUsernamesByDiscordIds(List.of(blockedNeighborId));
+                String blockedName = blockedUsernames.isEmpty() ? blockedNeighborId : blockedUsernames.get(0);
+
+                sendAdminAlertBlockedAssociation(playerName, blockedName);
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("security-check"));
                 return;
             }
 
             if (!user.isSharedIpAllowed()) {
-                sendAdminAlertMultiIp(playerName, ipAddress, otherIds, discordId);
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("security-check"));
-                return;
+                int globalLimit = plugin.getConfig().getInt("default-max-accounts-per-ip", 1);
+
+                if ((otherIds.size() + 1) > globalLimit) {
+                    List<String> associatedUsernames = userManager.getMinecraftUsernamesByDiscordIds(otherIds);
+
+                    sendAdminAlertMultiIp(playerName, ipAddress, associatedUsernames, discordId);
+                    plugin.getDiscordBot().sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
+
+                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("security-check"));
+                    return;
+                }
             }
         }
 
-
+        // Enforces IP verification cooldown or generates confirmation code
         if (!ipAddress.equals(user.getCurrentAllowedIp())) {
             try {
                 long secondsSinceLast = userManager.getSecondsSinceLastCode(discordId, ipAddress);
@@ -128,13 +139,9 @@ public class JoinListener implements Listener {
         broadcastToAdmins(alert);
     }
 
-    private void sendAdminAlertBlockedAssociation(String playerName, String blockedNeighborId) {
-        String message = String.format(getMessage("admin-alert-blocked-assoc"), playerName, blockedNeighborId);
-
+    private void sendAdminAlertBlockedAssociation(String playerName, String blockedNeighborName) {
+        String message = String.format(getMessage("admin-alert-blocked-assoc"), playerName, blockedNeighborName);
         TextComponent alert = new TextComponent(MessageColorizer.colorize(message + "\n"));
-
-        TextComponent btnBlock = new TextComponent(MessageColorizer.colorize(getMessage("button-block")));
-
         broadcastToAdmins(alert);
     }
 

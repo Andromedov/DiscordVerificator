@@ -42,11 +42,6 @@ public class User {
         this.allowSharedIp = allowSharedIp;
     }
 
-    @Deprecated
-    public User(String discordUsername, List<String> minecraftUsernames, List<LastTimeUserReceivedCode> latestVerificationsFromIps, String currentAllowedIp) {
-        this(discordUsername, minecraftUsernames, latestVerificationsFromIps, currentAllowedIp, false, false);
-    }
-
     public void setCurrentAllowedIp(String currentAllowedIp) {
         this.currentAllowedIp = currentAllowedIp;
     }

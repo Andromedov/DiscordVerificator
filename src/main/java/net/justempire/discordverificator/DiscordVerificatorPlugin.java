@@ -103,6 +103,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         return discordBot;
     }
 
+    public JDA getJDA() {
+        return currentJDA;
+    }
+
     private void setupBot() {
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
             String token = getConfig().getString("token");

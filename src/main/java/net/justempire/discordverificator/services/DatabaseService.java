@@ -1,10 +1,7 @@
 package net.justempire.discordverificator.services;
 
 import java.io.File;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.logging.Logger;
 
 public class DatabaseService {
@@ -94,22 +91,10 @@ public class DatabaseService {
     // Simple migration to add columns if they don't exist in existing DBs
     private void performMigrations() {
         try (Statement stmt = getConnection().createStatement()) {
-            try {
-                stmt.execute("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;");
-                logger.info("Migrated database: Added is_blocked column.");
-            } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE linked_accounts ADD COLUMN linked_at TIMESTAMP;"); } catch (SQLException ignored) {}
 
-            try {
-                stmt.execute("ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0;");
-                logger.info("Migrated database: Added allow_shared_ip column.");
-            } catch (SQLException ignored) {}
-
-            try {
-                stmt.execute("ALTER TABLE linked_accounts ADD COLUMN linked_at TIMESTAMP;");
-                logger.info("Migrated database: Added linked_at column.");
-            } catch (SQLException ignored) {}
-
-            // Create user_ips table if not exists (already in createTables, but good to ensure during migration)
             stmt.execute("CREATE TABLE IF NOT EXISTS user_ips (" +
                     "discord_id TEXT, " +
                     "ip_address TEXT, " +

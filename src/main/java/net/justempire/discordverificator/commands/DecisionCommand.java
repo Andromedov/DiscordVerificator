@@ -1,6 +1,7 @@
 package net.justempire.discordverificator.commands;
 
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
+import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.Bukkit;
@@ -25,13 +26,24 @@ public class DecisionCommand implements CommandExecutor {
             return true;
         }
 
-        if (args.length != 2) return false;
+        if (args.length != 2) {
+            sender.sendMessage(MessageColorizer.colorize("&cUsage: /dvdecision <allow|block> <Nick_or_DiscordID>"));
+            return true;
+        }
 
         String action = args[0];
-        String discordId = args[1];
+        String target = args[1];
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
+                String discordId = target;
+
+                if (target.matches("^[a-zA-Z0-9_]{3,16}$")) {
+                    try {
+                        discordId = userManager.getDiscordIdByMinecraftUsername(target);
+                    } catch (UserNotFoundException ignored) { }
+                }
+
                 if (action.equalsIgnoreCase("allow")) {
                     userManager.setAllowSharedIp(discordId, true);
                     sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("action-success")));
