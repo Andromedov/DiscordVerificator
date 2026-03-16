@@ -10,9 +10,10 @@ import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.DatabaseService;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
-import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
@@ -175,15 +176,36 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
     private void setupMessages() {
         messages = new HashMap<>();
-        ConfigurationSection configSection = getConfig().getConfigurationSection("messages");
-        if (configSection != null) {
-            Map<String, Object> messages = configSection.getValues(true);
-            for (Map.Entry<String, Object> pair : messages.entrySet()) {
-                DiscordVerificatorPlugin.messages.put(pair.getKey(), pair.getValue().toString());
+
+        File langFolder = new File(getDataFolder(), "lang");
+        if (!langFolder.exists()) {
+            langFolder.mkdirs();
+        }
+
+        File fallbackFile = new File(langFolder, "en.yml");
+        if (!fallbackFile.exists()) {
+            try {
+                saveResource("lang/en.yml", false);
+            } catch (IllegalArgumentException ignored) {}
+        }
+
+        String lang = getConfig().getString("language", "en");
+        File langFile = new File(langFolder, lang + ".yml");
+
+        if (!langFile.exists()) {
+            try {
+                saveResource("lang/" + lang + ".yml", false);
+            } catch (IllegalArgumentException e) {
+                logger.warning("Language file '" + lang + ".yml' not found in plugin JAR or folder! Falling back to en.yml");
+                langFile = fallbackFile;
             }
         }
 
-        saveDefaultConfig();
+        YamlConfiguration langConfig = YamlConfiguration.loadConfiguration(langFile);
+
+        for (String key : langConfig.getKeys(false)) {
+            messages.put(key, langConfig.getString(key));
+        }
     }
 
     public static String getMessage(String key) {
