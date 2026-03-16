@@ -51,8 +51,8 @@ public class DiscordBot extends ListenerAdapter {
 
     @Override
     public void onReady(@NotNull ReadyEvent event) {
-        SlashCommandData commandData = Commands.slash("confirm", getMessage("confirm-command"));
-        commandData.addOption(OptionType.STRING, "code", getMessage("verification-code-you-got"));
+        SlashCommandData commandData = Commands.slash("confirm", getMessage("discord.confirm-command"));
+        commandData.addOption(OptionType.STRING, "code", getMessage("discord.verification-code-you-got"));
 
         event.getJDA().updateCommands().addCommands(commandData).complete();
 
@@ -76,7 +76,7 @@ public class DiscordBot extends ListenerAdapter {
         String adminRoleId = plugin.getConfig().getString("discord-alerts.admin-role-id");
         if (adminRoleId != null && !adminRoleId.isEmpty()) {
             if (event.getMember() == null || event.getMember().getRoles().stream().noneMatch(r -> r.getId().equals(adminRoleId))) {
-                event.reply("❌ You do not have permission to use this!").setEphemeral(true).queue();
+                event.reply(getMessage("discord.no-permission")).setEphemeral(true).queue();
                 return;
             }
         }
@@ -94,7 +94,11 @@ public class DiscordBot extends ListenerAdapter {
 
                     // Update the Embed message design
                     newEmbed.setColor(Color.GREEN);
-                    newEmbed.addField("✅ Decision", "Approved (Trusted Bypass) by administrator " + event.getUser().getAsMention(), false);
+                    newEmbed.addField(
+                            getMessage("discord.decision-approved-title"),
+                            String.format(getMessage("discord.decision-approved-desc"), event.getUser().getAsMention()),
+                            false
+                    );
 
                 } else if (id.startsWith("dv_block_")) {
                     String targetDiscordId = id.substring("dv_block_".length());
@@ -102,7 +106,11 @@ public class DiscordBot extends ListenerAdapter {
 
                     // Update the Embed message design
                     newEmbed.setColor(Color.RED);
-                    newEmbed.addField("🛑 Decision", "Blocked by administrator " + event.getUser().getAsMention(), false);
+                    newEmbed.addField(
+                            getMessage("discord.decision-blocked-title"),
+                            String.format(getMessage("discord.decision-blocked-desc"), event.getUser().getAsMention()),
+                            false
+                    );
                 }
 
                 // Set the updated Embed and an empty component list
@@ -110,7 +118,7 @@ public class DiscordBot extends ListenerAdapter {
 
             } catch (Exception e) {
                 logger.log(Level.SEVERE, "Error handling button interaction", e);
-                event.getHook().sendMessage("❌ An error occurred while saving.").setEphemeral(true).queue();
+                event.getHook().sendMessage(getMessage("discord.error-saving")).setEphemeral(true).queue();
             }
         });
     }
@@ -131,18 +139,21 @@ public class DiscordBot extends ListenerAdapter {
         }
 
         EmbedBuilder embed = new EmbedBuilder();
-        embed.setTitle("⚠️ Security Alert: Multi-Account Detected");
+        embed.setTitle(getMessage("discord.alert-title"));
         embed.setColor(Color.ORANGE);
-        embed.setDescription("**Player Attempting to Join:** `" + playerName + "`\n" +
-                "**IP Address:** `" + ip + "`\n" +
-                "**Discord ID:** `" + targetDiscordId + "`\n\n" +
-                "**Associated Minecraft Accounts (same IP):**\n" + String.join(", ", associatedUsernames));
+
+        String description = String.format(getMessage("discord.alert-desc-player"), playerName) + "\n" +
+                String.format(getMessage("discord.alert-desc-ip"), ip) + "\n" +
+                String.format(getMessage("discord.alert-desc-discord"), targetDiscordId) + "\n\n" +
+                String.format(getMessage("discord.alert-desc-associated"), String.join(", ", associatedUsernames));
+
+        embed.setDescription(description);
 
         // Sends security alert embed with interactive trust/block buttons
         channel.sendMessageEmbeds(embed.build())
                 .setComponents(ActionRow.of(
-                        Button.success("dv_allow_" + targetDiscordId, "Trust User (Bypass)"),
-                        Button.danger("dv_block_" + targetDiscordId, "Block User")
+                        Button.success("dv_allow_" + targetDiscordId, getMessage("discord.button-trust")),
+                        Button.danger("dv_block_" + targetDiscordId, getMessage("discord.button-block"))
                 )).queue();
     }
 
@@ -159,7 +170,7 @@ public class DiscordBot extends ListenerAdapter {
 
                 // If code wasn't provided
                 if (code == null) {
-                    MessageEmbed embed = generateEmbed(getMessage("invalid-usage"), getMessage("provide-code-please"), 0xF63B2D);
+                    MessageEmbed embed = generateEmbed(getMessage("discord.invalid-usage"), getMessage("discord.provide-code-please"), 0xF63B2D);
                     event.getHook().sendMessageEmbeds(embed).queue(); // Use hook instead of reply
                     return;
                 }
@@ -169,7 +180,7 @@ public class DiscordBot extends ListenerAdapter {
                 try {
                     codeData = confirmationCodeService.getDataByCodeAndRemove(code.getAsString());
                 } catch (InvalidCodeException e) {
-                    MessageEmbed embed = generateEmbed(getMessage("invalid-code"), getMessage("invalid-code-description"), 0xF63B2D);
+                    MessageEmbed embed = generateEmbed(getMessage("discord.invalid-code"), getMessage("discord.invalid-code-description"), 0xF63B2D);
                     event.getHook().sendMessageEmbeds(embed).queue();
                     return;
                 }
@@ -178,7 +189,7 @@ public class DiscordBot extends ListenerAdapter {
                     String linkedDiscordId = userManager.getDiscordIdByMinecraftUsername(codeData.getUsername());
 
                     if (!linkedDiscordId.equals(discordId)) {
-                        MessageEmbed embed = generateEmbed(getMessage("error-occurred"), getMessage("its-not-your-account"), 0xF63B2D);
+                        MessageEmbed embed = generateEmbed(getMessage("discord.error-occurred"), getMessage("discord.its-not-your-account"), 0xF63B2D);
                         event.getHook().sendMessageEmbeds(embed).queue();
                         return;
                     }
@@ -186,19 +197,19 @@ public class DiscordBot extends ListenerAdapter {
                     // Confirming the code
                     confirmIp(discordId, codeData.getIpAddress());
                     MessageEmbed embed = generateEmbed(
-                            getMessage("allowed"),
-                            String.format(getMessage("allowed-to-join-from-ip"), codeData.getIpAddress()),
+                            getMessage("discord.allowed"),
+                            String.format(getMessage("discord.allowed-to-join-from-ip"), codeData.getIpAddress()),
                             0x9ACD32);
 
                     event.getHook().sendMessageEmbeds(embed).queue();
                 } catch (UserNotFoundException e) {
                     // Send user the message if he was not found
-                    MessageEmbed embed = generateEmbed(getMessage("user-not-found"), getMessage("user-not-found-description"), 0xF63B2D);
+                    MessageEmbed embed = generateEmbed(getMessage("discord.user-not-found"), getMessage("discord.user-not-found-description"), 0xF63B2D);
                     event.getHook().sendMessageEmbeds(embed).queue();
                 }
             } catch (Exception e) {
                 logger.log(Level.SEVERE, "An internal error occurred during confirm command", e);
-                event.getHook().sendMessage("An internal error occurred.").queue();
+                event.getHook().sendMessage(getMessage("discord.internal-error")).queue();
             }
         });
     }

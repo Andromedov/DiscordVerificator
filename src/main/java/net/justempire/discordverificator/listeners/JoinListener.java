@@ -48,17 +48,17 @@ public class JoinListener implements Listener {
             discordId = userManager.getDiscordIdByMinecraftUsername(playerName);
             user = userManager.getFullUserByDiscordId(discordId);
         } catch (UserNotFoundException e) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("account-not-linked"));
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.account-not-linked"));
             return;
         }
 
         if (user.isBlocked()) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("account-blocked"));
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.account-blocked"));
             return;
         }
 
         if (!plugin.getDiscordBot().isBotEnabled()) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("bot-not-working"));
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.bot-not-working"));
             return;
         }
 
@@ -90,7 +90,7 @@ public class JoinListener implements Listener {
                     alertCooldowns.put(playerName, currentTime);
                 }
 
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("security-check"));
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.security-check"));
                 return;
             }
 
@@ -109,7 +109,7 @@ public class JoinListener implements Listener {
                         alertCooldowns.put(playerName, currentTime);
                     }
 
-                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("security-check"));
+                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.security-check"));
                     return;
                 }
             }
@@ -121,7 +121,7 @@ public class JoinListener implements Listener {
                 long secondsSinceLast = userManager.getSecondsSinceLastCode(discordId, ipAddress);
                 if (secondsSinceLast < 30) {
                     event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                            String.format(getMessage("wait-until-verification"), 30 - secondsSinceLast));
+                            String.format(getMessage("in-game.wait-until-verification"), 30 - secondsSinceLast));
                     return;
                 }
             } catch (NoCodesFoundException ignored) {
@@ -131,23 +131,25 @@ public class JoinListener implements Listener {
             userManager.updateLastTimeUserReceivedCode(discordId, ipAddress);
 
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
-                    String.format(DiscordVerificatorPlugin.getMessage("confirm-with-command"), code));
-        } else { userManager.updatePlayerLoginTime(playerName, ipAddress); }
+                    String.format(getMessage("in-game.confirm-with-command"), code));
+        } else {
+            userManager.updatePlayerLoginTime(playerName, ipAddress);
+        }
     }
 
     private void sendAdminAlertMultiIp(String playerName, String ip, List<String> others, String currentDiscordId) {
         String neighbors = String.join(", ", others);
-        String message = String.format(getMessage("admin-alert-multi-ip"), playerName, ip, neighbors);
+        String message = String.format(getMessage("admin-alerts.multi-ip"), playerName, ip, neighbors);
 
         TextComponent alert = new TextComponent(MessageColorizer.colorize(message + "\n"));
 
-        TextComponent btnAllow = new TextComponent(MessageColorizer.colorize(getMessage("button-allow") + " "));
+        TextComponent btnAllow = new TextComponent(MessageColorizer.colorize(getMessage("admin-alerts.button-allow") + " "));
         btnAllow.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/dvdecision allow " + currentDiscordId));
-        btnAllow.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(MessageColorizer.colorize(getMessage("hover-allow")))));
+        btnAllow.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(MessageColorizer.colorize(getMessage("admin-alerts.hover-allow")))));
 
-        TextComponent btnBlock = new TextComponent(MessageColorizer.colorize(getMessage("button-block")));
+        TextComponent btnBlock = new TextComponent(MessageColorizer.colorize(getMessage("admin-alerts.button-block")));
         btnBlock.setClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND, "/dvdecision block " + currentDiscordId));
-        btnBlock.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(MessageColorizer.colorize(getMessage("hover-block")))));
+        btnBlock.setHoverEvent(new HoverEvent(HoverEvent.Action.SHOW_TEXT, new Text(MessageColorizer.colorize(getMessage("admin-alerts.hover-block")))));
 
         alert.addExtra(btnAllow);
         alert.addExtra(btnBlock);
@@ -156,7 +158,7 @@ public class JoinListener implements Listener {
     }
 
     private void sendAdminAlertBlockedAssociation(String playerName, String blockedNeighborName) {
-        String message = String.format(getMessage("admin-alert-blocked-assoc"), playerName, blockedNeighborName);
+        String message = String.format(getMessage("admin-alerts.blocked-assoc"), playerName, blockedNeighborName);
         TextComponent alert = new TextComponent(MessageColorizer.colorize(message + "\n"));
         broadcastToAdmins(alert);
     }
