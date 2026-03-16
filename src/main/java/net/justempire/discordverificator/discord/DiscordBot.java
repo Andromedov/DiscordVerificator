@@ -81,17 +81,36 @@ public class DiscordBot extends ListenerAdapter {
             }
         }
 
+        event.deferEdit().queue();
+
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (id.startsWith("dv_allow_")) {
-                String targetDiscordId = id.substring("dv_allow_".length());
-                userManager.setAllowSharedIp(targetDiscordId, true); // Довіряємо акаунту
-                event.reply("✅ Successfully marked user (Discord ID: " + targetDiscordId + ") as Trusted Bypass.").queue();
-                event.getMessage().editMessageComponents().queue();
-            } else if (id.startsWith("dv_block_")) {
-                String targetDiscordId = id.substring("dv_block_".length());
-                userManager.setUserBlocked(targetDiscordId, true);
-                event.reply("🛑 Successfully blocked user (Discord ID: " + targetDiscordId + ").").queue();
-                event.getMessage().editMessageComponents().queue();
+            try {
+                MessageEmbed oldEmbed = event.getMessage().getEmbeds().get(0);
+                EmbedBuilder newEmbed = new EmbedBuilder(oldEmbed);
+
+                if (id.startsWith("dv_allow_")) {
+                    String targetDiscordId = id.substring("dv_allow_".length());
+                    userManager.setAllowSharedIp(targetDiscordId, true);
+
+                    // Update the Embed message design
+                    newEmbed.setColor(Color.GREEN);
+                    newEmbed.addField("✅ Decision", "Approved (Trusted Bypass) by administrator " + event.getUser().getAsMention(), false);
+
+                } else if (id.startsWith("dv_block_")) {
+                    String targetDiscordId = id.substring("dv_block_".length());
+                    userManager.setUserBlocked(targetDiscordId, true);
+
+                    // Update the Embed message design
+                    newEmbed.setColor(Color.RED);
+                    newEmbed.addField("🛑 Decision", "Blocked by administrator " + event.getUser().getAsMention(), false);
+                }
+
+                // Set the updated Embed and an empty component list
+                event.getHook().editOriginalEmbeds(newEmbed.build()).setComponents().queue();
+
+            } catch (Exception e) {
+                logger.log(Level.SEVERE, "Error handling button interaction", e);
+                event.getHook().sendMessage("❌ An error occurred while saving.").setEphemeral(true).queue();
             }
         });
     }
