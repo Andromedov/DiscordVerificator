@@ -247,10 +247,12 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             defaultResourcePath = "lang/en.yml";
         }
 
-        mergeYamlFile(langFile, langConfig, defaultResourcePath, false);
+        mergeYamlFile(langFile, langConfig, defaultResourcePath, true);
 
-        for (String key : langConfig.getKeys(false)) {
-            messages.put(key, langConfig.getString(key));
+        for (String key : langConfig.getKeys(true)) {
+            if (langConfig.isString(key)) {
+                messages.put(key, langConfig.getString(key));
+            }
         }
     }
 
