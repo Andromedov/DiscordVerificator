@@ -24,7 +24,7 @@ public class DecisionCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
         if (!sender.hasPermission("discordVerificator.alerts")) {
-            sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("not-enough-permissions")));
+            sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.not-enough-permissions")));
             return true;
         }
 
@@ -48,13 +48,13 @@ public class DecisionCommand implements CommandExecutor {
 
                 if (action.equalsIgnoreCase("allow")) {
                     userManager.setAllowSharedIp(discordId, true);
-                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("action-success")));
+                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
                 } else if (action.equalsIgnoreCase("block")) {
                     userManager.setUserBlocked(discordId, true);
-                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("action-success")));
+                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
                 }
             } catch (Exception e) {
-                sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("action-failed")));
+                sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));
                 plugin.getLogger().log(Level.SEVERE, "Failed to execute decision command", e);
             }
         });
