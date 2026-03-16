@@ -19,11 +19,16 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class JoinListener implements Listener {
     private final UserManager userManager;
     private final DiscordVerificatorPlugin plugin;
     private final ConfirmationCodeService confirmationCodeService;
+
+    private final Map<String, Long> alertCooldowns = new ConcurrentHashMap<>();
+    private static final long ALERT_COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3 hours
 
     public JoinListener(DiscordVerificatorPlugin plugin, UserManager userManager, ConfirmationCodeService confirmationCodeService) {
         this.userManager = userManager;
@@ -76,10 +81,15 @@ public class JoinListener implements Listener {
             }
 
             if (blockedAssociationFound) {
-                List<String> blockedUsernames = userManager.getMinecraftUsernamesByDiscordIds(List.of(blockedNeighborId));
-                String blockedName = blockedUsernames.isEmpty() ? blockedNeighborId : blockedUsernames.get(0);
+                long currentTime = System.currentTimeMillis();
+                if (currentTime - alertCooldowns.getOrDefault(playerName, 0L) > ALERT_COOLDOWN_MS) {
+                    List<String> blockedUsernames = userManager.getMinecraftUsernamesByDiscordIds(List.of(blockedNeighborId));
+                    String blockedName = blockedUsernames.isEmpty() ? blockedNeighborId : blockedUsernames.get(0);
 
-                sendAdminAlertBlockedAssociation(playerName, blockedName);
+                    sendAdminAlertBlockedAssociation(playerName, blockedName);
+                    alertCooldowns.put(playerName, currentTime);
+                }
+
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("security-check"));
                 return;
             }
@@ -88,10 +98,16 @@ public class JoinListener implements Listener {
                 int globalLimit = plugin.getConfig().getInt("default-max-accounts-per-ip", 1);
 
                 if ((otherIds.size() + 1) > globalLimit) {
-                    List<String> associatedUsernames = userManager.getMinecraftUsernamesByDiscordIds(otherIds);
+                    long currentTime = System.currentTimeMillis();
 
-                    sendAdminAlertMultiIp(playerName, ipAddress, associatedUsernames, discordId);
-                    plugin.getDiscordBot().sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
+                    if (currentTime - alertCooldowns.getOrDefault(playerName, 0L) > ALERT_COOLDOWN_MS) {
+                        List<String> associatedUsernames = userManager.getMinecraftUsernamesByDiscordIds(otherIds);
+
+                        sendAdminAlertMultiIp(playerName, ipAddress, associatedUsernames, discordId);
+                        plugin.getDiscordBot().sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
+
+                        alertCooldowns.put(playerName, currentTime);
+                    }
 
                     event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("security-check"));
                     return;
