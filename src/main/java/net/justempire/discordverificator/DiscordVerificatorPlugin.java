@@ -10,10 +10,15 @@ import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.DatabaseService;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
+import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
@@ -35,9 +40,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
     @Override
     public void onEnable() {
-        saveDefaultConfig();
-
         logger = this.getLogger();
+
+        mergeConfig();
 
         DatabaseService databaseService = new DatabaseService(getDataFolder().getAbsolutePath(), logger);
         try {
@@ -107,6 +112,38 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         return currentJDA;
     }
 
+    private void mergeConfig() {
+        saveDefaultConfig();
+        File configFile = new File(getDataFolder(), "config.yml");
+        mergeYamlFile(configFile, getConfig(), "config.yml", true);
+    }
+
+    private void mergeYamlFile(File targetFile, FileConfiguration targetConfig, String resourcePath, boolean deepKeySearch) {
+        InputStream defaultStream = getResource(resourcePath);
+        if (defaultStream == null) {
+            return;
+        }
+
+        YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(new InputStreamReader(defaultStream, StandardCharsets.UTF_8));
+        boolean hasChanges = false;
+
+        for (String key : defaultConfig.getKeys(deepKeySearch)) {
+            if (!targetConfig.contains(key)) {
+                targetConfig.set(key, defaultConfig.get(key));
+                hasChanges = true;
+            }
+        }
+
+        if (hasChanges) {
+            try {
+                targetConfig.save(targetFile);
+                logger.info("Updated " + targetFile.getName() + " with missing default values.");
+            } catch (IOException e) {
+                logger.log(Level.SEVERE, "Could not save merged file " + targetFile.getName(), e);
+            }
+        }
+    }
+
     private void setupBot() {
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
             String token = getConfig().getString("token");
@@ -158,6 +195,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
                 getServer().getScheduler().runTask(this, () -> {
                     reloadConfig();
+                    mergeConfig();
                     setupMessages();
 
                     setupBot();
@@ -198,10 +236,18 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             } catch (IllegalArgumentException e) {
                 logger.warning("Language file '" + lang + ".yml' not found in plugin JAR or folder! Falling back to en.yml");
                 langFile = fallbackFile;
+                lang = "en";
             }
         }
 
         YamlConfiguration langConfig = YamlConfiguration.loadConfiguration(langFile);
+
+        String defaultResourcePath = "lang/" + lang + ".yml";
+        if (getResource(defaultResourcePath) == null) {
+            defaultResourcePath = "lang/en.yml";
+        }
+
+        mergeYamlFile(langFile, langConfig, defaultResourcePath, false);
 
         for (String key : langConfig.getKeys(false)) {
             messages.put(key, langConfig.getString(key));
