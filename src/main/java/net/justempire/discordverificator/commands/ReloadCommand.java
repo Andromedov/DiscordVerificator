@@ -17,12 +17,12 @@ public class ReloadCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] arguments) {
         if (!commandSender.hasPermission("discordVerificator.reload")) {
-            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("not-enough-permissions")));
+            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.not-enough-permissions")));
             return true;
         }
 
         plugin.reload();
-        commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("reloaded")));
+        commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.reloaded")));
 
         return true;
     }

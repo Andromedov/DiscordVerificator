@@ -1,8 +1,12 @@
 package net.justempire.discordverificator.discord;
 
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.components.actionrow.ActionRow;
+import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
 import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -19,6 +23,9 @@ import net.justempire.discordverificator.services.UserManager;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 
+import java.awt.Color;
+import java.util.List;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class DiscordBot extends ListenerAdapter {
@@ -44,8 +51,8 @@ public class DiscordBot extends ListenerAdapter {
 
     @Override
     public void onReady(@NotNull ReadyEvent event) {
-        SlashCommandData commandData = Commands.slash("confirm", getMessage("confirm-command"));
-        commandData.addOption(OptionType.STRING, "code", getMessage("verification-code-you-got"));
+        SlashCommandData commandData = Commands.slash("confirm", getMessage("discord.confirm-command"));
+        commandData.addOption(OptionType.STRING, "code", getMessage("discord.verification-code-you-got"));
 
         event.getJDA().updateCommands().addCommands(commandData).complete();
 
@@ -61,6 +68,95 @@ public class DiscordBot extends ListenerAdapter {
         if (event.getName().equals("confirm")) onConfirmSlashCommand(event);
     }
 
+    @Override
+    public void onButtonInteraction(@NotNull ButtonInteractionEvent event) {
+        String id = event.getComponentId();
+        if (!id.startsWith("dv_")) return;
+
+        String adminRoleId = plugin.getConfig().getString("discord-alerts.admin-role-id");
+        if (adminRoleId != null && !adminRoleId.isEmpty()) {
+            if (event.getMember() == null || event.getMember().getRoles().stream().noneMatch(r -> r.getId().equals(adminRoleId))) {
+                event.reply(getMessage("discord.no-permission")).setEphemeral(true).queue();
+                return;
+            }
+        }
+
+        event.deferEdit().queue();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            try {
+                MessageEmbed oldEmbed = event.getMessage().getEmbeds().get(0);
+                EmbedBuilder newEmbed = new EmbedBuilder(oldEmbed);
+
+                if (id.startsWith("dv_allow_")) {
+                    String targetDiscordId = id.substring("dv_allow_".length());
+                    userManager.setAllowSharedIp(targetDiscordId, true);
+
+                    // Update the Embed message design
+                    newEmbed.setColor(Color.GREEN);
+                    newEmbed.addField(
+                            getMessage("discord.decision-approved-title"),
+                            String.format(getMessage("discord.decision-approved-desc"), event.getUser().getAsMention()),
+                            false
+                    );
+
+                } else if (id.startsWith("dv_block_")) {
+                    String targetDiscordId = id.substring("dv_block_".length());
+                    userManager.setUserBlocked(targetDiscordId, true);
+
+                    // Update the Embed message design
+                    newEmbed.setColor(Color.RED);
+                    newEmbed.addField(
+                            getMessage("discord.decision-blocked-title"),
+                            String.format(getMessage("discord.decision-blocked-desc"), event.getUser().getAsMention()),
+                            false
+                    );
+                }
+
+                // Set the updated Embed and an empty component list
+                event.getHook().editOriginalEmbeds(newEmbed.build()).setComponents().queue();
+
+            } catch (Exception e) {
+                logger.log(Level.SEVERE, "Error handling button interaction", e);
+                event.getHook().sendMessage(getMessage("discord.error-saving")).setEphemeral(true).queue();
+            }
+        });
+    }
+
+    /**
+     * Sends multi-account security alert with interactive response buttons
+     */
+    public void sendSecurityAlert(String playerName, String ip, List<String> associatedUsernames, String targetDiscordId) {
+        if (plugin.getJDA() == null) return;
+
+        String channelId = plugin.getConfig().getString("discord-alerts.channel-id");
+        if (channelId == null || channelId.isEmpty()) return;
+
+        TextChannel channel = plugin.getJDA().getTextChannelById(channelId);
+        if (channel == null) {
+            logger.warning("Could not find Discord channel for alerts! Check your config.");
+            return;
+        }
+
+        EmbedBuilder embed = new EmbedBuilder();
+        embed.setTitle(getMessage("discord.alert-title"));
+        embed.setColor(Color.ORANGE);
+
+        String description = String.format(getMessage("discord.alert-desc-player"), playerName) + "\n" +
+                String.format(getMessage("discord.alert-desc-ip"), ip) + "\n" +
+                String.format(getMessage("discord.alert-desc-discord"), targetDiscordId) + "\n\n" +
+                String.format(getMessage("discord.alert-desc-associated"), String.join(", ", associatedUsernames));
+
+        embed.setDescription(description);
+
+        // Sends security alert embed with interactive trust/block buttons
+        channel.sendMessageEmbeds(embed.build())
+                .setComponents(ActionRow.of(
+                        Button.success("dv_allow_" + targetDiscordId, getMessage("discord.button-trust")),
+                        Button.danger("dv_block_" + targetDiscordId, getMessage("discord.button-block"))
+                )).queue();
+    }
+
     private void onConfirmSlashCommand(@NotNull SlashCommandInteractionEvent event) {
         event.deferReply(true).queue();
 
@@ -74,7 +170,7 @@ public class DiscordBot extends ListenerAdapter {
 
                 // If code wasn't provided
                 if (code == null) {
-                    MessageEmbed embed = generateEmbed(getMessage("invalid-usage"), getMessage("provide-code-please"), 0xF63B2D);
+                    MessageEmbed embed = generateEmbed(getMessage("discord.invalid-usage"), getMessage("discord.provide-code-please"), 0xF63B2D);
                     event.getHook().sendMessageEmbeds(embed).queue(); // Use hook instead of reply
                     return;
                 }
@@ -84,7 +180,7 @@ public class DiscordBot extends ListenerAdapter {
                 try {
                     codeData = confirmationCodeService.getDataByCodeAndRemove(code.getAsString());
                 } catch (InvalidCodeException e) {
-                    MessageEmbed embed = generateEmbed(getMessage("invalid-code"), getMessage("invalid-code-description"), 0xF63B2D);
+                    MessageEmbed embed = generateEmbed(getMessage("discord.invalid-code"), getMessage("discord.invalid-code-description"), 0xF63B2D);
                     event.getHook().sendMessageEmbeds(embed).queue();
                     return;
                 }
@@ -93,7 +189,7 @@ public class DiscordBot extends ListenerAdapter {
                     String linkedDiscordId = userManager.getDiscordIdByMinecraftUsername(codeData.getUsername());
 
                     if (!linkedDiscordId.equals(discordId)) {
-                        MessageEmbed embed = generateEmbed(getMessage("error-occurred"), getMessage("its-not-your-account"), 0xF63B2D);
+                        MessageEmbed embed = generateEmbed(getMessage("discord.error-occurred"), getMessage("discord.its-not-your-account"), 0xF63B2D);
                         event.getHook().sendMessageEmbeds(embed).queue();
                         return;
                     }
@@ -101,20 +197,19 @@ public class DiscordBot extends ListenerAdapter {
                     // Confirming the code
                     confirmIp(discordId, codeData.getIpAddress());
                     MessageEmbed embed = generateEmbed(
-                            getMessage("allowed"),
-                            String.format(getMessage("allowed-to-join-from-ip"), codeData.getIpAddress()),
+                            getMessage("discord.allowed"),
+                            String.format(getMessage("discord.allowed-to-join-from-ip"), codeData.getIpAddress()),
                             0x9ACD32);
 
                     event.getHook().sendMessageEmbeds(embed).queue();
                 } catch (UserNotFoundException e) {
                     // Send user the message if he was not found
-                    MessageEmbed embed = generateEmbed(getMessage("user-not-found"), getMessage("user-not-found-description"), 0xF63B2D);
+                    MessageEmbed embed = generateEmbed(getMessage("discord.user-not-found"), getMessage("discord.user-not-found-description"), 0xF63B2D);
                     event.getHook().sendMessageEmbeds(embed).queue();
                 }
             } catch (Exception e) {
-                // Catch unexpected errors to prevent silent failures
-                e.printStackTrace();
-                event.getHook().sendMessage("An internal error occurred.").queue();
+                logger.log(Level.SEVERE, "An internal error occurred during confirm command", e);
+                event.getHook().sendMessage(getMessage("discord.internal-error")).queue();
             }
         });
     }

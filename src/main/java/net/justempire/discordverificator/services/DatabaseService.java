@@ -1,12 +1,11 @@
 package net.justempire.discordverificator.services;
 
 import java.io.File;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.SQLException;
-import java.sql.Statement;
+import java.sql.*;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
+@SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection", "SqlDialectInspection"})
 public class DatabaseService {
     private final String url;
     private final Logger logger;
@@ -18,17 +17,15 @@ public class DatabaseService {
         this.url = "jdbc:sqlite:" + dataFolder + File.separator + "database.db";
 
         try {
-            // Load driver explicitely to ensure it's available
+            // Load driver explicitly to ensure it's available
             Class.forName("org.sqlite.JDBC");
-        } catch (ClassNotFoundException e) {
-            logger.severe("SQLite JDBC Driver not found!");
-            e.printStackTrace();
-        }
+        } catch (ClassNotFoundException e) { this.logger.log(Level.SEVERE, "SQLite JDBC Driver not found!", e); }
     }
 
     public void initialize() throws SQLException {
         getConnection(); // Ensure connection is established
         createTables();
+        performMigrations();
     }
 
     public synchronized Connection getConnection() throws SQLException {
@@ -43,21 +40,22 @@ public class DatabaseService {
             if (connection != null && !connection.isClosed()) {
                 connection.close();
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Failed to close database connection", e); }
     }
 
     private void createTables() throws SQLException {
         String createUsersTable = "CREATE TABLE IF NOT EXISTS users (" +
                 "discord_id TEXT PRIMARY KEY, " +
-                "current_allowed_ip TEXT" +
+                "current_allowed_ip TEXT, " +
+                "is_blocked INTEGER DEFAULT 0, " +
+                "allow_shared_ip INTEGER DEFAULT 0" +
                 ");";
 
         String createLinksTable = "CREATE TABLE IF NOT EXISTS linked_accounts (" +
                 "minecraft_username TEXT PRIMARY KEY, " +
                 "discord_id TEXT NOT NULL, " +
                 "last_login TIMESTAMP, " +
+                "linked_at TIMESTAMP, " +
                 "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
                 ");";
 
@@ -70,10 +68,45 @@ public class DatabaseService {
                 "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
                 ");";
 
+        // Table to track all historical IPs verified by the user (for multi-account detection)
+        String createUserIpsTable = "CREATE TABLE IF NOT EXISTS user_ips (" +
+                "discord_id TEXT, " +
+                "ip_address TEXT, " +
+                "last_seen TIMESTAMP, " +
+                "PRIMARY KEY (discord_id, ip_address), " +
+                "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
+                ");";
+
         try (Statement stmt = getConnection().createStatement()) {
             stmt.execute(createUsersTable);
             stmt.execute(createLinksTable);
             stmt.execute(createHistoryTable);
+            stmt.execute(createUserIpsTable);
         }
+    }
+
+    // Simple migration to add columns if they don't exist in existing DBs
+    private void performMigrations() {
+        try (Statement stmt = getConnection().createStatement()) {
+            try { stmt.execute("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE linked_accounts ADD COLUMN linked_at TIMESTAMP;"); } catch (SQLException ignored) {}
+
+            stmt.execute("CREATE TABLE IF NOT EXISTS user_ips (" +
+                    "discord_id TEXT, " +
+                    "ip_address TEXT, " +
+                    "last_seen TIMESTAMP, " +
+                    "PRIMARY KEY (discord_id, ip_address), " +
+                    "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
+                    ");");
+
+            // Backfill existing IPs into the history
+            try {
+                stmt.execute("INSERT OR IGNORE INTO user_ips (discord_id, ip_address, last_seen) " +
+                        "SELECT discord_id, current_allowed_ip, CURRENT_TIMESTAMP FROM users " +
+                        "WHERE current_allowed_ip IS NOT NULL AND current_allowed_ip != '';");
+            } catch (SQLException ignored) {}
+
+        } catch (SQLException e) { logger.log(Level.SEVERE, "Failed to perform database migrations", e); }
     }
 }

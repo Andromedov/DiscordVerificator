@@ -22,12 +22,12 @@ public class UnlinkCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] arguments) {
         if (!commandSender.hasPermission("discordVerificator.unlink")) {
-            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("not-enough-permissions")));
+            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.not-enough-permissions")));
             return true;
         }
 
         if (arguments.length != 1) {
-            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("invalid-unlink-format")));
+            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-unlink-format")));
             return true;
         }
 
@@ -37,11 +37,11 @@ public class UnlinkCommand implements CommandExecutor {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 userManager.unlinkUser(targetPlayer);
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("successfully-unlinked")));
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-unlinked")));
             } catch (NotFoundException e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("player-was-not-linked")));
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (Exception e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("error-occurred")));
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
                 e.printStackTrace();
             }
         });

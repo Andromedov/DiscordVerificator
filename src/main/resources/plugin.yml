@@ -11,11 +11,17 @@ commands:
   unlink:
     description: Unlink player from Discord
     usage: unlink <Player>
+  relink:
+    description: Relink an existing player to a new username
+    usage: relink <Old Player Name> <New Player Name>
   dvreload:
     description: Reload the plugin
-  info:
+  dvinfo:
     description: Check player info
-    usage: info <Player>
+    usage: dvinfo <Player>
+  dvdecision:
+    description: Internal command for handling alerts
+    usage: dvdecision <allow|block> <discordId>
 
 permissions:
   discordVerificator.link:
@@ -24,9 +30,15 @@ permissions:
   discordVerificator.unlink:
     description: Allows to unlink player from Discord profile
     default: op
+  discordVerificator.relink:
+    description: Allows to relink player to a new username
+    default: op
   discordVerificator.reload:
     description: Allows to reload the plugin
     default: op
   discordVerificator.info:
     description: Allows to check info
+    default: op
+  discordVerificator.alerts:
+    description: Allows to handle alerts
     default: op

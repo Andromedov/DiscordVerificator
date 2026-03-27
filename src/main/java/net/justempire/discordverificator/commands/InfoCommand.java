@@ -24,12 +24,12 @@ public class InfoCommand implements CommandExecutor {
     @Override
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] arguments) {
         if (!commandSender.hasPermission("discordVerificator.info")) {
-            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("not-enough-permissions")));
+            commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.not-enough-permissions")));
             return true;
         }
 
         if (arguments.length != 1) {
-            commandSender.sendMessage(MessageColorizer.colorize("&cUsage: /info <player>"));
+            commandSender.sendMessage(MessageColorizer.colorize("&cUsage: /dvinfo <player>"));
             return true;
         }
 
@@ -43,13 +43,14 @@ public class InfoCommand implements CommandExecutor {
                 commandSender.sendMessage(MessageColorizer.colorize("&6&l Info for: &f" + targetPlayer));
                 commandSender.sendMessage(MessageColorizer.colorize("&7 Discord ID: &f" + info.get("discord_id")));
                 commandSender.sendMessage(MessageColorizer.colorize("&7 Allowed IP: &f" + info.get("current_ip")));
+                commandSender.sendMessage(MessageColorizer.colorize("&7 First Linked: &f" + info.get("linked_at")));
                 commandSender.sendMessage(MessageColorizer.colorize("&7 Last Login: &f" + info.get("last_login")));
                 commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
 
             } catch (UserNotFoundException e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("player-was-not-linked")));
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (Exception e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("error-occurred")));
+                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
                 e.printStackTrace();
             }
         });
