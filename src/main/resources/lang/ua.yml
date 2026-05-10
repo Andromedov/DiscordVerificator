@@ -18,6 +18,7 @@ in-game:
   action-success: "&aДію успішно виконано."
   action-failed: "&cНе вдалося виконати дію."
   reloaded: "&#14C60D[DiscordVerificator] Перезавантажено!"
+  not-in-discord-server: "&cВи повинні бути учасником нашого Discord сервера, щоб грати!\n&fБудь ласка, приєднайтесь за посиланням: &n%s"
 
 discord:
   error-occurred: "Виникла помилка!"

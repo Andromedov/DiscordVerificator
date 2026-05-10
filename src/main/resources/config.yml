@@ -12,6 +12,13 @@ language: en
 # Note: You can override this for specific users using /dvdecision allow <discordId | playerName> <amount>
 default-max-accounts-per-ip: 1
 
+# The ID of your Discord server (guild). If a player isn't on the server, they won't be allowed in.
+# Leave this field blank ("") to disable this check.
+required-guild-id: ""
+
+# A link to the Discord server invitation that will be displayed to the player if they are not on the server.
+discord-invite-link: "https://discord.gg/yourinvite"
+
 # If configured, multi-account alerts will be sent directly to your Discord staff channel
 discord-alerts:
   channel-id: "" # E.g., "123456789012345678"

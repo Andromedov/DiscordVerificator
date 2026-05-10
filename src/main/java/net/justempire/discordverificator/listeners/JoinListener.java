@@ -62,6 +62,19 @@ public class JoinListener implements Listener {
             return;
         }
 
+        // --- CHECKING ATTENDANCE ON THE DISCORD SERVER ---
+        String requiredGuildId = plugin.getConfig().getString("required-guild-id");
+        // Enforces required Discord guild membership before login
+        if (requiredGuildId != null && !requiredGuildId.isEmpty()) {
+            boolean isInGuild = plugin.getDiscordBot().isUserInGuild(discordId, requiredGuildId);
+            if (!isInGuild) {
+                String inviteLink = plugin.getConfig().getString("discord-invite-link", "https://discord.gg/");
+                String kickMessage = String.format(getMessage("in-game.not-in-discord-server"), inviteLink);
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, kickMessage);
+                return;
+            }
+        }
+
         // --- MULTI-ACCOUNT / SHARED IP DETECTION ---
         List<String> otherIds = userManager.getOtherDiscordIdsWithSameIp(ipAddress, discordId);
 

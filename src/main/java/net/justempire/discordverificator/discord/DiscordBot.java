@@ -3,6 +3,8 @@ package net.justempire.discordverificator.discord;
 import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.MessageEmbed;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
@@ -62,9 +64,44 @@ public class DiscordBot extends ListenerAdapter {
 
     public boolean isBotEnabled() { return botEnabled; }
 
+    /**
+     * Checks whether the user is on the specified Discord server.
+     * This method makes an API request to Discord, so it is blocking (use only in asynchronous events).
+     * @param discordId The Discord ID of the user to check
+     * @param guildId The ID of the Discord server to check against
+     * @return true if the user is on the server, false otherwise
+     */
+    public boolean isUserInGuild(String discordId, String guildId) {
+        if (plugin.getJDA() == null) return true;
+
+        Guild guild = plugin.getJDA().getGuildById(guildId);
+        if (guild == null) {
+            logger.warning("Unable to find the Discord server (Guild) with ID " + guildId + ". Is the bot on the server?");
+            return true;
+        }
+
+        // Verifies user membership in guild via API; returns true on errors
+        try {
+            if (guild.getMemberById(discordId) != null) return true;
+
+            Member member = guild.retrieveMemberById(discordId).complete();
+            return member != null;
+        } catch (net.dv8tion.jda.api.exceptions.ErrorResponseException e) {
+            if (e.getErrorResponse() == net.dv8tion.jda.api.requests.ErrorResponse.UNKNOWN_MEMBER ||
+                    e.getErrorResponse() == net.dv8tion.jda.api.requests.ErrorResponse.UNKNOWN_USER) {
+                return false;
+            }
+            logger.log(Level.WARNING, "API error when checking if a player is on the Discord server", e);
+            return true;
+        } catch (Exception e) {
+            logger.log(Level.WARNING, "An unexpected error occurred while checking if a player is on the Discord server", e);
+            return true;
+        }
+    }
+
     @Override
     public void onSlashCommandInteraction(@NotNull SlashCommandInteractionEvent event) {
-        // If command is "confirm"
+        // If the command is "confirm"
         if (event.getName().equals("confirm")) onConfirmSlashCommand(event);
     }
 
