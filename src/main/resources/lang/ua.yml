@@ -3,6 +3,7 @@ in-game:
   invalid-link-format: "&cНеправильний формат! Використовуйте: /link <гравець> <discordId>"
   invalid-unlink-format: "&cНеправильний формат! Використовуйте: /unlink <гравець>"
   invalid-relink-format: "&cНеправильний формат! Використовуйте: /relink <старий_гравець> <новий_гравець>"
+  invalid-decision-format: "&cНеправильний формат! Використовуйте: /dvdecision  <allow|block|unblock> <Nick_or_DiscordID>"
   invalid-user-id-format: "&cНеправильний формат Discord ID!"
   successfully-linked: "&aУспішно прив'язано!"
   successfully-unlinked: "&aУспішно відв'язано!"
