@@ -3,6 +3,7 @@ in-game:
   invalid-link-format: "&cInvalid format! Please use: /link <player> <discordId>"
   invalid-unlink-format: "&cInvalid format! Please use: /unlink <player>"
   invalid-relink-format: "&cInvalid format! Please use: /relink <old_player> <new_player>"
+  invalid-decision-format: "&cInvalid format! Please use: /dvdecision  <allow|block|unblock> <Nick_or_DiscordID>"
   invalid-user-id-format: "&cInvalid Discord ID format!"
   successfully-linked: "&aSuccessfully linked!"
   successfully-unlinked: "&aSuccessfully unlinked!"

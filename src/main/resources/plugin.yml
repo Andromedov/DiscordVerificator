@@ -21,7 +21,7 @@ commands:
     usage: dvinfo <Player>
   dvdecision:
     description: Internal command for handling alerts
-    usage: dvdecision <allow|block> <discordId>
+    usage: dvdecision <allow|block|unblock> <discordId>
 
 permissions:
   discordVerificator.link:

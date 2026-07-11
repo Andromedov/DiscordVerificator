@@ -29,7 +29,7 @@ public class DecisionCommand implements CommandExecutor {
         }
 
         if (args.length != 2) {
-            sender.sendMessage(MessageColorizer.colorize("&cUsage: /dvdecision <allow|block> <Nick_or_DiscordID>"));
+            sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-decision-format")));
             return true;
         }
 
@@ -52,6 +52,11 @@ public class DecisionCommand implements CommandExecutor {
                 } else if (action.equalsIgnoreCase("block")) {
                     userManager.setUserBlocked(discordId, true);
                     sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                } else if (action.equalsIgnoreCase("unblock")) {
+                    userManager.setUserBlocked(discordId, false);
+                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                } else {
+                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-decision-format")));
                 }
             } catch (Exception e) {
                 sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));
