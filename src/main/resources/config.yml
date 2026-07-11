@@ -23,3 +23,11 @@ discord-invite-link: "https://discord.gg/yourinvite"
 discord-alerts:
   channel-id: "" # E.g., "123456789012345678"
   admin-role-id: "" # The role ID required to click "Allow" / "Block" buttons
+
+# If enabled (default), players must confirm their IP address via the "/confirm" Discord command
+# whenever their IP changes, before they're allowed to join.
+# If disabled, this step is skipped entirely — players will only need to:
+#   - be a linked account,
+#   - be present on the required Discord server (if configured),
+#   - pass the multi-account/shared-IP check.
+require-ip-verification: true

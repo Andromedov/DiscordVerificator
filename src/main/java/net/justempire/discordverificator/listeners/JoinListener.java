@@ -128,6 +128,14 @@ public class JoinListener implements Listener {
             }
         }
 
+        // --- IP-BASED CODE VERIFICATION (can be disabled via config) ---
+        boolean requireIpVerification = plugin.getConfig().getBoolean("require-ip-verification", true);
+
+        if (!requireIpVerification) {
+            userManager.updatePlayerLoginTime(playerName, ipAddress);
+            return;
+        }
+
         // Enforces IP verification cooldown or generates confirmation code
         if (!ipAddress.equals(user.getCurrentAllowedIp())) {
             try {
