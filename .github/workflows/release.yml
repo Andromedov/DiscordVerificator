@@ -86,16 +86,19 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'maven'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
 
       - name: Build project
-        run: mvn clean package -B
+        run: ./gradlew clean build -x test --no-daemon
 
       - name: Upload Release Artifact
         uses: actions/upload-artifact@v7.0.0
         with:
           name: release-artifact
-          path: target/*.jar
+          path: build/libs/*.jar
           retention-days: 1
 
   publish:

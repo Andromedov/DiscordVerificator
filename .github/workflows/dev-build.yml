@@ -23,21 +23,24 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'maven'
+          cache: 'gradle'
 
       - name: Generate Short SHA
         id: vars
         run: echo "SHORT_SHA=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
       - name: Build project
-        run: mvn clean package -B
+        run: ./gradlew clean build -x test --no-daemon
 
       - name: Rename Artifact with DEV suffix
         id: rename
         run: |
-          cd target
+          cd build/libs
           for file in *.jar; do
-            if [[ "$file" != "original-"* && "$file" != *"-sources.jar" && "$file" != *"-javadoc.jar" ]]; then
+            if [[ "$file" != *"-sources.jar" && "$file" != *"-javadoc.jar" ]]; then
               mv "$file" "${file%.jar}-DEV.jar"
               echo "Renamed $file to ${file%.jar}-DEV.jar"
             fi
@@ -47,5 +50,5 @@ jobs:
         uses: actions/upload-artifact@v7.0.0
         with:
           name: DiscordVerificator-Dev-${{ steps.vars.outputs.SHORT_SHA }}
-          path: target/*-DEV.jar
+          path: build/libs/*-DEV.jar
           retention-days: 7
