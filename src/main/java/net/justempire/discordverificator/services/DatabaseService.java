@@ -7,6 +7,13 @@ import java.util.logging.Logger;
 
 @SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection", "SqlDialectInspection"})
 public class DatabaseService {
+    @FunctionalInterface
+    interface TransactionWork<T> {
+        T execute(Connection connection) throws SQLException;
+    }
+
+    private static final int BUSY_TIMEOUT_MS = 5_000;
+
     private final String url;
     private final Logger logger;
     private Connection connection;
@@ -31,11 +38,42 @@ public class DatabaseService {
     public synchronized Connection getConnection() throws SQLException {
         if (connection == null || connection.isClosed()) {
             connection = DriverManager.getConnection(url);
+            configureConnection(connection);
         }
         return connection;
     }
 
-    public void closeConnection() {
+    private void configureConnection(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute("PRAGMA foreign_keys = ON");
+            statement.execute("PRAGMA busy_timeout = " + BUSY_TIMEOUT_MS);
+            statement.execute("PRAGMA journal_mode = WAL");
+            statement.execute("PRAGMA synchronous = NORMAL");
+        }
+    }
+
+    synchronized <T> T executeInTransaction(TransactionWork<T> work) throws SQLException {
+        Connection activeConnection = getConnection();
+        boolean previousAutoCommit = activeConnection.getAutoCommit();
+        activeConnection.setAutoCommit(false);
+
+        try {
+            T result = work.execute(activeConnection);
+            activeConnection.commit();
+            return result;
+        } catch (SQLException | RuntimeException e) {
+            try {
+                activeConnection.rollback();
+            } catch (SQLException rollbackException) {
+                e.addSuppressed(rollbackException);
+            }
+            throw e;
+        } finally {
+            activeConnection.setAutoCommit(previousAutoCommit);
+        }
+    }
+
+    public synchronized void closeConnection() {
         try {
             if (connection != null && !connection.isClosed()) {
                 connection.close();

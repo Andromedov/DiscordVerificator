@@ -20,6 +20,10 @@ dependencies {
     implementation("net.dv8tion:JDA:6.3.1")
     implementation("com.fasterxml.jackson.core:jackson-databind:2.16.0")
     implementation("org.xerial:sqlite-jdbc:3.51.1.0")
+
+    testImplementation(platform("org.junit:junit-bom:5.11.4"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 java {
@@ -37,5 +41,8 @@ tasks {
     }
     build {
         dependsOn(shadowJar)
+    }
+    test {
+        useJUnitPlatform()
     }
 }

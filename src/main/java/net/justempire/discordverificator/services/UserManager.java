@@ -35,7 +35,7 @@ public class UserManager {
         migrateFromJson();
     }
 
-    private void migrateFromJson() {
+    private synchronized void migrateFromJson() {
         File jsonFile = new File(jsonPath);
         if (!jsonFile.exists()) return;
 
@@ -61,7 +61,7 @@ public class UserManager {
         }
     }
 
-    private void upsertUser(String discordId, String currentIp) throws SQLException {
+    private synchronized void upsertUser(String discordId, String currentIp) throws SQLException {
         String sql = "INSERT INTO users (discord_id, current_allowed_ip) VALUES(?, ?) " +
                 "ON CONFLICT(discord_id) DO UPDATE SET current_allowed_ip = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
@@ -72,7 +72,7 @@ public class UserManager {
         }
     }
 
-    public String getDiscordIdByMinecraftUsername(String minecraftUsername) throws UserNotFoundException {
+    public synchronized String getDiscordIdByMinecraftUsername(String minecraftUsername) throws UserNotFoundException {
         String sql = "SELECT discord_id FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, minecraftUsername);
@@ -84,7 +84,7 @@ public class UserManager {
         throw new UserNotFoundException();
     }
 
-    public User getFullUserByDiscordId(String discordId) throws UserNotFoundException {
+    public synchronized User getFullUserByDiscordId(String discordId) throws UserNotFoundException {
         String sql = "SELECT * FROM users WHERE discord_id = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
@@ -103,7 +103,7 @@ public class UserManager {
     }
 
     // Check for other users with the same IP in the historical database!
-    public List<String> getOtherDiscordIdsWithSameIp(String ip, String excludeDiscordId) {
+    public synchronized List<String> getOtherDiscordIdsWithSameIp(String ip, String excludeDiscordId) {
         List<String> ids = new ArrayList<>();
         String sql = "SELECT DISTINCT discord_id FROM user_ips WHERE ip_address = ? AND discord_id != ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
@@ -118,7 +118,7 @@ public class UserManager {
     /**
      * Fetches usernames by Discord IDs with null/empty handling
      */
-    public List<String> getMinecraftUsernamesByDiscordIds(List<String> discordIds) {
+    public synchronized List<String> getMinecraftUsernamesByDiscordIds(List<String> discordIds) {
         List<String> usernames = new ArrayList<>();
         if (discordIds == null || discordIds.isEmpty()) return usernames;
 
@@ -140,7 +140,7 @@ public class UserManager {
     }
 
     // Set Blocked Status
-    public void setUserBlocked(String discordId, boolean blocked) {
+    public synchronized void setUserBlocked(String discordId, boolean blocked) {
         String sql = "UPDATE users SET is_blocked = ? WHERE discord_id = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setInt(1, blocked ? 1 : 0);
@@ -150,7 +150,7 @@ public class UserManager {
     }
 
     // Set Allow Shared IP Status
-    public void setAllowSharedIp(String discordId, boolean allowed) {
+    public synchronized void setAllowSharedIp(String discordId, boolean allowed) {
         String sql = "UPDATE users SET allow_shared_ip = ? WHERE discord_id = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setInt(1, allowed ? 1 : 0);
@@ -159,7 +159,7 @@ public class UserManager {
         } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
-    public Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {
+    public synchronized Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {
         String sql = "SELECT l.discord_id, l.last_login, l.linked_at, u.current_allowed_ip, u.is_blocked, u.allow_shared_ip " +
                 "FROM linked_accounts l " +
                 "JOIN users u ON l.discord_id = u.discord_id " +
@@ -188,30 +188,34 @@ public class UserManager {
         throw new UserNotFoundException();
     }
 
-    public void updatePlayerLoginTime(String minecraftUsername, String ip) {
-        String sql = "UPDATE linked_accounts SET last_login = ? WHERE minecraft_username = ? COLLATE NOCASE";
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
-            pstmt.setTimestamp(1, Timestamp.from(Instant.now()));
-            pstmt.setString(2, minecraftUsername);
-            pstmt.executeUpdate();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
-
-        // Record successful IP login in user_ips table
+    public synchronized void updatePlayerLoginTime(String minecraftUsername, String ip) {
         try {
             String discordId = getDiscordIdByMinecraftUsername(minecraftUsername);
-            String sqlIps = "INSERT INTO user_ips (discord_id, ip_address, last_seen) VALUES (?, ?, ?) ON CONFLICT(discord_id, ip_address) DO UPDATE SET last_seen = ?";
-            try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlIps)) {
+            databaseService.executeInTransaction(connection -> {
                 Timestamp now = Timestamp.from(Instant.now());
-                pstmt.setString(1, discordId);
-                pstmt.setString(2, ip);
-                pstmt.setTimestamp(3, now);
-                pstmt.setTimestamp(4, now);
-                pstmt.executeUpdate();
-            }
+
+                String updateLoginSql = "UPDATE linked_accounts SET last_login = ? WHERE minecraft_username = ? COLLATE NOCASE";
+                try (PreparedStatement pstmt = connection.prepareStatement(updateLoginSql)) {
+                    pstmt.setTimestamp(1, now);
+                    pstmt.setString(2, minecraftUsername);
+                    pstmt.executeUpdate();
+                }
+
+                String updateIpHistorySql = "INSERT INTO user_ips (discord_id, ip_address, last_seen) VALUES (?, ?, ?) " +
+                        "ON CONFLICT(discord_id, ip_address) DO UPDATE SET last_seen = ?";
+                try (PreparedStatement pstmt = connection.prepareStatement(updateIpHistorySql)) {
+                    pstmt.setString(1, discordId);
+                    pstmt.setString(2, ip);
+                    pstmt.setTimestamp(3, now);
+                    pstmt.setTimestamp(4, now);
+                    pstmt.executeUpdate();
+                }
+                return null;
+            });
         } catch (UserNotFoundException | SQLException e) { logger.log(Level.SEVERE, "Database error or UserNotFound", e); }
     }
 
-    private List<String> getLinkedAccounts(String discordId) {
+    private synchronized List<String> getLinkedAccounts(String discordId) {
         List<String> accounts = new ArrayList<>();
         String sql = "SELECT minecraft_username FROM linked_accounts WHERE discord_id = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
@@ -222,28 +226,40 @@ public class UserManager {
         return accounts;
     }
 
-    public void updateIp(String discordId, String newIp) throws UserNotFoundException {
-        String sql = "UPDATE users SET current_allowed_ip = ? WHERE discord_id = ?";
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
-            pstmt.setString(1, newIp);
-            pstmt.setString(2, discordId);
-            int affected = pstmt.executeUpdate();
-            if (affected == 0) throw new UserNotFoundException();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+    public synchronized void updateIp(String discordId, String newIp) throws UserNotFoundException {
+        try {
+            boolean userUpdated = databaseService.executeInTransaction(connection -> {
+                String updateUserSql = "UPDATE users SET current_allowed_ip = ? WHERE discord_id = ?";
+                try (PreparedStatement pstmt = connection.prepareStatement(updateUserSql)) {
+                    pstmt.setString(1, newIp);
+                    pstmt.setString(2, discordId);
+                    if (pstmt.executeUpdate() == 0) {
+                        return false;
+                    }
+                }
 
-        // Also track this newly verified IP in the history
-        String sqlIps = "INSERT INTO user_ips (discord_id, ip_address, last_seen) VALUES (?, ?, ?) ON CONFLICT(discord_id, ip_address) DO UPDATE SET last_seen = ?";
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlIps)) {
-            Timestamp now = Timestamp.from(Instant.now());
-            pstmt.setString(1, discordId);
-            pstmt.setString(2, newIp);
-            pstmt.setTimestamp(3, now);
-            pstmt.setTimestamp(4, now);
-            pstmt.executeUpdate();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+                String updateIpHistorySql = "INSERT INTO user_ips (discord_id, ip_address, last_seen) VALUES (?, ?, ?) " +
+                        "ON CONFLICT(discord_id, ip_address) DO UPDATE SET last_seen = ?";
+                try (PreparedStatement pstmt = connection.prepareStatement(updateIpHistorySql)) {
+                    Timestamp now = Timestamp.from(Instant.now());
+                    pstmt.setString(1, discordId);
+                    pstmt.setString(2, newIp);
+                    pstmt.setTimestamp(3, now);
+                    pstmt.setTimestamp(4, now);
+                    pstmt.executeUpdate();
+                }
+                return true;
+            });
+
+            if (!userUpdated) {
+                throw new UserNotFoundException();
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Database error while updating verified IP", e);
+        }
     }
 
-    public void linkUser(String discordId, String minecraftUsername) throws MinecraftUsernameAlreadyLinkedException {
+    public synchronized void linkUser(String discordId, String minecraftUsername) throws MinecraftUsernameAlreadyLinkedException {
         try { upsertUser(discordId, ""); } catch (SQLException e) { return; }
 
         String sql = "INSERT INTO linked_accounts (minecraft_username, discord_id, linked_at) VALUES (?, ?, ?)";
@@ -260,7 +276,7 @@ public class UserManager {
         }
     }
 
-    public void unlinkUser(String minecraftUsername) throws NotFoundException {
+    public synchronized void unlinkUser(String minecraftUsername) throws NotFoundException {
         String sql = "DELETE FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, minecraftUsername);
@@ -269,7 +285,7 @@ public class UserManager {
         } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
-    public void relinkUser(String oldUsername, String newUsername) throws UserNotFoundException, MinecraftUsernameAlreadyLinkedException {
+    public synchronized void relinkUser(String oldUsername, String newUsername) throws UserNotFoundException, MinecraftUsernameAlreadyLinkedException {
         String discordId;
         Timestamp linkedAt;
         Timestamp lastLogin;
@@ -313,7 +329,7 @@ public class UserManager {
         }
     }
 
-    public void updateLastTimeUserReceivedCode(String discordId, String ip) {
+    public synchronized void updateLastTimeUserReceivedCode(String discordId, String ip) {
         String sql = "INSERT INTO verification_history (discord_id, ip_address, last_received) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
@@ -323,7 +339,7 @@ public class UserManager {
         } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
     }
 
-    public long getSecondsSinceLastCode(String discordId, String ip) throws NoCodesFoundException {
+    public synchronized long getSecondsSinceLastCode(String discordId, String ip) throws NoCodesFoundException {
         String sql = "SELECT last_received FROM verification_history WHERE discord_id = ? AND ip_address = ? ORDER BY last_received DESC LIMIT 1";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setString(1, discordId);
@@ -337,5 +353,5 @@ public class UserManager {
         throw new NoCodesFoundException();
     }
 
-    public void onShutDown() { databaseService.closeConnection(); }
+    public synchronized void onShutDown() { databaseService.closeConnection(); }
 }
