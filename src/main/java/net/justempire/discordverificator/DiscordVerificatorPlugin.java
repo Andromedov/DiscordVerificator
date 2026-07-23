@@ -23,20 +23,31 @@ import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class DiscordVerificatorPlugin extends JavaPlugin {
+    public enum DiscordServiceState {
+        STOPPED,
+        STARTING,
+        READY,
+        FAILED,
+        STOPPING
+    }
+
     private Logger logger;
     private UserManager userManager;
     private ConfirmationCodeService confirmationCodeService;
-    private DiscordBot discordBot;
+    private volatile DiscordBot discordBot;
 
-    private JDA currentJDA;
+    private volatile JDA currentJDA;
+    private volatile DiscordServiceState discordServiceState = DiscordServiceState.STOPPED;
+    private final AtomicLong discordLifecycleGeneration = new AtomicLong();
     private static Map<String, String> messages = new HashMap<>();
 
-    private boolean isReloading = false;
+    private volatile boolean isReloading = false;
 
     @Override
     public void onEnable() {
@@ -87,25 +98,50 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     }
 
     private void shutdownBotSync() {
-        if (currentJDA != null) {
-            currentJDA.removeEventListener(discordBot);
-            currentJDA.shutdown();
+        long generation = discordLifecycleGeneration.incrementAndGet();
+        discordServiceState = DiscordServiceState.STOPPING;
+
+        JDA jdaToShutdown = currentJDA;
+        DiscordBot botToShutdown = discordBot;
+        currentJDA = null;
+        discordBot = null;
+
+        if (jdaToShutdown != null) {
+            if (botToShutdown != null) {
+                jdaToShutdown.removeEventListener(botToShutdown);
+            }
+            jdaToShutdown.shutdown();
             try {
-                if (!currentJDA.awaitShutdown(5, TimeUnit.SECONDS)) {
+                if (!jdaToShutdown.awaitShutdown(5, TimeUnit.SECONDS)) {
                     logger.warning("JDA took too long to shutdown, forcing...");
-                    currentJDA.shutdownNow();
+                    jdaToShutdown.shutdownNow();
                 }
             } catch (InterruptedException e) {
                 logger.warning("Interrupted while waiting for JDA to shutdown!");
-                currentJDA.shutdownNow();
+                jdaToShutdown.shutdownNow();
                 Thread.currentThread().interrupt(); // Restore interrupted status
             }
-            currentJDA = null;
+        }
+
+        if (discordLifecycleGeneration.get() == generation) {
+            discordServiceState = DiscordServiceState.STOPPED;
         }
     }
 
     public DiscordBot getDiscordBot() {
         return discordBot;
+    }
+
+    public DiscordBot getReadyDiscordBot() {
+        DiscordBot bot = discordBot;
+        if (discordServiceState != DiscordServiceState.READY || bot == null || !bot.isBotEnabled()) {
+            return null;
+        }
+        return bot;
+    }
+
+    public DiscordServiceState getDiscordServiceState() {
+        return discordServiceState;
     }
 
     public JDA getJDA() {
@@ -145,32 +181,46 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     }
 
     private void setupBot() {
+        String token = getConfig().getString("token");
+        long generation = discordLifecycleGeneration.incrementAndGet();
+
+        if (token == null || token.isBlank() || token.contains("DISCORD_BOT_TOKEN")) {
+            discordServiceState = DiscordServiceState.FAILED;
+            logger.warning("Please set a valid bot token in config.yml!");
+            return;
+        }
+
+        discordServiceState = DiscordServiceState.STARTING;
+
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
-            String token = getConfig().getString("token");
-
-            if (token == null || token.contains("DISCORD_BOT_TOKEN")) {
-                logger.warning("Please set a valid bot token in config.yml!");
-                return;
-            }
-
             DiscordBot bot = new DiscordBot(this, logger, userManager, confirmationCodeService);
+            JDA candidateJDA = null;
 
             try {
-                if (this.currentJDA != null) {
-                    this.currentJDA.shutdownNow();
-                }
-
-                this.currentJDA = JDABuilder.createLight(token)
+                candidateJDA = JDABuilder.createLight(token)
                         .addEventListeners(bot)
                         .setAutoReconnect(true)
                         .setStatus(OnlineStatus.ONLINE)
                         .build();
 
-                this.currentJDA.awaitReady();
-                this.discordBot = bot;
+                candidateJDA.awaitReady();
 
+                if (!isEnabled() || discordLifecycleGeneration.get() != generation) {
+                    candidateJDA.shutdownNow();
+                    return;
+                }
+
+                this.currentJDA = candidateJDA;
+                this.discordBot = bot;
+                this.discordServiceState = DiscordServiceState.READY;
                 logger.info("Discord Bot connected and ready!");
             } catch (Exception e) {
+                if (candidateJDA != null) {
+                    candidateJDA.shutdownNow();
+                }
+                if (discordLifecycleGeneration.get() == generation) {
+                    this.discordServiceState = DiscordServiceState.FAILED;
+                }
                 logger.log(Level.SEVERE, "Failed to connect to Discord! Check your token or internet connection.", e);
             }
         });
@@ -183,31 +233,23 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         logger.info("Reloading plugin...");
 
         getServer().getScheduler().runTaskAsynchronously(this, () -> {
+            shutdownBotSync();
+
             try {
-                if (currentJDA != null) {
-                    currentJDA.shutdown();
-                    if (!currentJDA.awaitShutdown(10, TimeUnit.SECONDS)) {
-                        logger.warning("Forcing JDA shutdown during reload...");
-                        currentJDA.shutdownNow();
-                    }
-                    currentJDA = null;
-                }
-
                 getServer().getScheduler().runTask(this, () -> {
-                    reloadConfig();
-                    mergeConfig();
-                    setupMessages();
-
-                    setupBot();
-
-                    isReloading = false;
-                    logger.info("Reload complete!");
+                    try {
+                        reloadConfig();
+                        mergeConfig();
+                        setupMessages();
+                        setupBot();
+                        logger.info("Reload complete!");
+                    } finally {
+                        isReloading = false;
+                    }
                 });
-
-            } catch (InterruptedException e) {
-                logger.severe("Reload interrupted!");
+            } catch (RuntimeException e) {
                 isReloading = false;
-                Thread.currentThread().interrupt();
+                logger.log(Level.SEVERE, "Reload failed!", e);
             }
         });
     }

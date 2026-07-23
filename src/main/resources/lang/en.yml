@@ -12,6 +12,7 @@ in-game:
   player-was-not-linked: "&cThis player was never linked!"
   account-not-linked: "&cYour account is not linked to a Discord profile yet."
   bot-not-working: "&cThe Discord bot is not currently working!\nAsk the administrator to resolve this issue."
+  discord-check-unavailable: "&cDiscord verification is temporarily unavailable.\nPlease try again later or contact an administrator."
   confirm-with-command: "&6Confirm your IP via our Discord bot\nUsage: &f&n/confirm %s"
   wait-until-verification: "&cPlease wait until you can request a new code!\n&f&n%s seconds left."
   account-blocked: "&cYour account has been blocked by an administrator."

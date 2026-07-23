@@ -1,6 +1,7 @@
 package net.justempire.discordverificator.listeners;
 
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
+import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.exceptions.NoCodesFoundException;
 import net.justempire.discordverificator.models.User;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
@@ -57,7 +58,8 @@ public class JoinListener implements Listener {
             return;
         }
 
-        if (!plugin.getDiscordBot().isBotEnabled()) {
+        DiscordBot discordBot = plugin.getReadyDiscordBot();
+        if (discordBot == null) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.bot-not-working"));
             return;
         }
@@ -66,12 +68,21 @@ public class JoinListener implements Listener {
         String requiredGuildId = plugin.getConfig().getString("required-guild-id");
         // Enforces required Discord guild membership before login
         if (requiredGuildId != null && !requiredGuildId.isEmpty()) {
-            boolean isInGuild = plugin.getDiscordBot().isUserInGuild(discordId, requiredGuildId);
-            if (!isInGuild) {
-                String inviteLink = plugin.getConfig().getString("discord-invite-link", "https://discord.gg/");
-                String kickMessage = String.format(getMessage("in-game.not-in-discord-server"), inviteLink);
-                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, kickMessage);
-                return;
+            DiscordBot.GuildMembershipStatus membershipStatus = discordBot.checkUserInGuild(discordId, requiredGuildId);
+            switch (membershipStatus) {
+                case MEMBER -> {
+                    // Continue the login checks.
+                }
+                case NOT_MEMBER -> {
+                    String inviteLink = plugin.getConfig().getString("discord-invite-link", "https://discord.gg/");
+                    String kickMessage = String.format(getMessage("in-game.not-in-discord-server"), inviteLink);
+                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, kickMessage);
+                    return;
+                }
+                case TEMPORARY_ERROR, CONFIGURATION_ERROR -> {
+                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.discord-check-unavailable"));
+                    return;
+                }
             }
         }
 
@@ -117,7 +128,7 @@ public class JoinListener implements Listener {
                         List<String> associatedUsernames = userManager.getMinecraftUsernamesByDiscordIds(otherIds);
 
                         sendAdminAlertMultiIp(playerName, ipAddress, associatedUsernames, discordId);
-                        plugin.getDiscordBot().sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
+                        discordBot.sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
 
                         alertCooldowns.put(playerName, currentTime);
                     }

@@ -1,6 +1,7 @@
 package net.justempire.discordverificator.discord;
 
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.components.actionrow.ActionRow;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.entities.Guild;
@@ -31,12 +32,19 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class DiscordBot extends ListenerAdapter {
+    public enum GuildMembershipStatus {
+        MEMBER,
+        NOT_MEMBER,
+        TEMPORARY_ERROR,
+        CONFIGURATION_ERROR
+    }
+
     private final DiscordVerificatorPlugin plugin;
     private final Logger logger;
     private final UserManager userManager;
     private final ConfirmationCodeService confirmationCodeService;
 
-    private boolean botEnabled = false;
+    private volatile boolean botEnabled = false;
 
     public DiscordBot(DiscordVerificatorPlugin plugin, Logger logger, UserManager repository, ConfirmationCodeService confirmationCodeService) {
         this.plugin = plugin;
@@ -69,33 +77,43 @@ public class DiscordBot extends ListenerAdapter {
      * This method makes an API request to Discord, so it is blocking (use only in asynchronous events).
      * @param discordId The Discord ID of the user to check
      * @param guildId The ID of the Discord server to check against
-     * @return true if the user is on the server, false otherwise
+     * @return a status that distinguishes membership, absence, temporary failures, and configuration errors
      */
-    public boolean isUserInGuild(String discordId, String guildId) {
-        if (plugin.getJDA() == null) return true;
-
-        Guild guild = plugin.getJDA().getGuildById(guildId);
-        if (guild == null) {
-            logger.warning("Unable to find the Discord server (Guild) with ID " + guildId + ". Is the bot on the server?");
-            return true;
+    public GuildMembershipStatus checkUserInGuild(String discordId, String guildId) {
+        JDA jda = plugin.getJDA();
+        if (jda == null) {
+            logger.warning("Cannot check Discord guild membership because JDA is unavailable.");
+            return GuildMembershipStatus.TEMPORARY_ERROR;
         }
 
-        // Verifies user membership in guild via API; returns true on errors
+        Guild guild;
         try {
-            if (guild.getMemberById(discordId) != null) return true;
+            guild = jda.getGuildById(guildId);
+        } catch (IllegalArgumentException e) {
+            logger.log(Level.WARNING, "Invalid Discord guild ID configured: " + guildId, e);
+            return GuildMembershipStatus.CONFIGURATION_ERROR;
+        }
+
+        if (guild == null) {
+            logger.warning("Unable to find the Discord server (Guild) with ID " + guildId + ". Is the bot on the server?");
+            return GuildMembershipStatus.CONFIGURATION_ERROR;
+        }
+
+        try {
+            if (guild.getMemberById(discordId) != null) return GuildMembershipStatus.MEMBER;
 
             Member member = guild.retrieveMemberById(discordId).complete();
-            return member != null;
+            return member != null ? GuildMembershipStatus.MEMBER : GuildMembershipStatus.NOT_MEMBER;
         } catch (net.dv8tion.jda.api.exceptions.ErrorResponseException e) {
             if (e.getErrorResponse() == net.dv8tion.jda.api.requests.ErrorResponse.UNKNOWN_MEMBER ||
                     e.getErrorResponse() == net.dv8tion.jda.api.requests.ErrorResponse.UNKNOWN_USER) {
-                return false;
+                return GuildMembershipStatus.NOT_MEMBER;
             }
             logger.log(Level.WARNING, "API error when checking if a player is on the Discord server", e);
-            return true;
+            return GuildMembershipStatus.TEMPORARY_ERROR;
         } catch (Exception e) {
             logger.log(Level.WARNING, "An unexpected error occurred while checking if a player is on the Discord server", e);
-            return true;
+            return GuildMembershipStatus.TEMPORARY_ERROR;
         }
     }
 

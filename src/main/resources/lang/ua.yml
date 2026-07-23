@@ -12,6 +12,7 @@ in-game:
   player-was-not-linked: "&cЦей гравець ніколи не був прив'язаний!"
   account-not-linked: "&cВаш акаунт ще не прив'язаний до Discord профілю."
   bot-not-working: "&cDiscord бот зараз не працює!\nЗверніться до адміністратора для вирішення проблеми."
+  discord-check-unavailable: "&cПеревірка через Discord тимчасово недоступна.\nСпробуйте пізніше або зверніться до адміністратора."
   confirm-with-command: "&6Підтвердіть ваш IP через нашого Discord бота\nВикористання: &f&n/confirm %s"
   wait-until-verification: "&cБудь ласка, зачекайте перед запитом нового коду!\n&f&nЗалишилось %s секунд."
   account-blocked: "&cВаш акаунт було заблоковано адміністратором."
