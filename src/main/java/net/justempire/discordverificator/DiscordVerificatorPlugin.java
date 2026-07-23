@@ -39,7 +39,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             boolean requireIpVerification,
             String discordAlertChannelId,
             String discordAdminRoleId,
-            long verificationCodeExpirationSeconds
+            long verificationCodeExpirationSeconds,
+            boolean maskIpAddressesInStaffMessages,
+            int ipHistoryRetentionDays
     ) {
     }
 
@@ -55,6 +57,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     private UserManager userManager;
     private ConfirmationCodeService confirmationCodeService;
     private BukkitTask verificationCodeCleanupTask;
+    private BukkitTask ipDataCleanupTask;
     private volatile DiscordBot discordBot;
 
     private volatile JDA currentJDA;
@@ -94,6 +97,12 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 20L * 60,
                 20L * 60
         );
+        ipDataCleanupTask = getServer().getScheduler().runTaskTimerAsynchronously(
+                this,
+                this::purgeExpiredIpData,
+                1L,
+                20L * 60 * 60 * 24
+        );
 
         // Setting up the messages
         setupMessages();
@@ -124,6 +133,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         }
         if (confirmationCodeService != null) {
             confirmationCodeService.clear();
+        }
+        if (ipDataCleanupTask != null) {
+            ipDataCleanupTask.cancel();
+            ipDataCleanupTask = null;
         }
 
         if (userManager != null) userManager.onShutDown(); // Closes DB connection
@@ -361,8 +374,31 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 getConfig().getBoolean("require-ip-verification", true),
                 getConfig().getString("discord-alerts.channel-id", ""),
                 getConfig().getString("discord-alerts.admin-role-id", ""),
-                getConfig().getLong("verification-code.expiration-seconds", 300)
+                getConfig().getLong("verification-code.expiration-seconds", 300),
+                getConfig().getBoolean("privacy.mask-ip-addresses-in-staff-messages", true),
+                Math.max(1, Math.min(3650, getConfig().getInt("privacy.ip-history-retention-days", 30)))
         );
+    }
+
+    private void purgeExpiredIpData() {
+        if (shuttingDown || userManager == null) {
+            return;
+        }
+
+        try {
+            UserManager.IpDataCleanupResult result =
+                    userManager.purgeExpiredIpData(runtimeSettings.ipHistoryRetentionDays());
+            if (result.orphanUsersDeleted() > 0
+                    || result.historicalIpsDeleted() > 0
+                    || result.verificationRecordsDeleted() > 0) {
+                logger.info("Expired IP data cleanup removed "
+                        + result.orphanUsersDeleted() + " orphan user record(s), "
+                        + result.historicalIpsDeleted() + " historical IP record(s), and "
+                        + result.verificationRecordsDeleted() + " verification record(s).");
+            }
+        } catch (RuntimeException e) {
+            logger.log(Level.SEVERE, "Failed to clean up expired IP data", e);
+        }
     }
 
     public static String getMessage(String key) {

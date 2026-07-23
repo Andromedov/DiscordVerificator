@@ -36,3 +36,12 @@ require-ip-verification: true
 # Allowed range: 30-3600 seconds. Values outside this range are clamped.
 verification-code:
   expiration-seconds: 300
+
+# Privacy controls for IP addresses processed by the plugin.
+privacy:
+  # Recommended: mask IP addresses in /dvinfo, in-game staff alerts, and Discord staff alerts.
+  mask-ip-addresses-in-staff-messages: true
+  # Historical IP and verification cooldown records older than this are deleted automatically.
+  # The currently allowed IP remains stored while the Discord account is linked because it is
+  # required for IP-change verification. Allowed range: 1-3650 days.
+  ip-history-retention-days: 30

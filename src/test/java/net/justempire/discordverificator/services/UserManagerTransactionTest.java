@@ -119,6 +119,59 @@ class UserManagerTransactionTest {
         assertTrue(userManager.getFullUserByDiscordId(discordId).isSharedIpAllowed());
     }
 
+    @Test
+    void expiredIpHistoryIsDeletedButCurrentAllowedIpIsRetained() throws Exception {
+        String currentUserId = "777777777777777777";
+        String historicalUserId = "888888888888888888";
+        String currentAllowedIp = "198.51.100.10";
+        String historicalIp = "203.0.113.7";
+
+        userManager.linkUser(currentUserId, "CurrentIpPlayer");
+        userManager.updateIp(currentUserId, currentAllowedIp);
+        userManager.linkUser(historicalUserId, "HistoricalIpPlayer");
+        userManager.updatePlayerLoginTime("HistoricalIpPlayer", historicalIp);
+        userManager.updateLastTimeUserReceivedCode(historicalUserId, historicalIp);
+
+        try (Statement statement = databaseService.getConnection().createStatement()) {
+            statement.executeUpdate("UPDATE user_ips SET last_seen = datetime('now', '-60 days')");
+            statement.executeUpdate("UPDATE verification_history SET last_received = datetime('now', '-60 days')");
+        }
+
+        UserManager.IpDataCleanupResult result = userManager.purgeExpiredIpData(30);
+
+        assertEquals(0, result.orphanUsersDeleted());
+        assertEquals(1, result.historicalIpsDeleted());
+        assertEquals(1, result.verificationRecordsDeleted());
+        assertEquals(1, countRows("user_ips", "ip_address", currentAllowedIp));
+        assertEquals(0, countRows("user_ips", "ip_address", historicalIp));
+        assertEquals(0, countRows("verification_history", "ip_address", historicalIp));
+    }
+
+    @Test
+    void ipCleanupRejectsUnsafeRetentionPeriod() {
+        assertThrows(IllegalArgumentException.class, () -> userManager.purgeExpiredIpData(0));
+    }
+
+    @Test
+    void unlinkingLastAccountDeletesOrphanUserAndIpData() throws Exception {
+        String discordId = "999999999999999999";
+        String ipAddress = "192.0.2.25";
+        userManager.linkUser(discordId, "FirstLinkedPlayer");
+        userManager.linkUser(discordId, "SecondLinkedPlayer");
+        userManager.updateIp(discordId, ipAddress);
+        userManager.updateLastTimeUserReceivedCode(discordId, ipAddress);
+
+        userManager.unlinkUser("FirstLinkedPlayer");
+        assertEquals(discordId, userManager.getFullUserByDiscordId(discordId).getDiscordId());
+
+        userManager.unlinkUser("SecondLinkedPlayer");
+
+        assertThrows(UserNotFoundException.class, () -> userManager.getFullUserByDiscordId(discordId));
+        assertEquals(0, countRows("users", "discord_id", discordId));
+        assertEquals(0, countRows("user_ips", "discord_id", discordId));
+        assertEquals(0, countRows("verification_history", "discord_id", discordId));
+    }
+
     private int countRows(String table, String column, String value) throws SQLException {
         String sql = "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = ?";
         try (PreparedStatement statement = databaseService.getConnection().prepareStatement(sql)) {

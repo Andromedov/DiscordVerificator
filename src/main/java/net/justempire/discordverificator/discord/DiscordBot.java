@@ -23,6 +23,7 @@ import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.models.UsernameAndIp;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.UserManager;
+import net.justempire.discordverificator.utils.IpAddressUtil;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 
@@ -243,8 +244,12 @@ public class DiscordBot extends ListenerAdapter {
         embed.setTitle(getMessage("discord.alert-title"));
         embed.setColor(Color.ORANGE);
 
+        String displayedIp = IpAddressUtil.displayForStaff(
+                ip,
+                plugin.getRuntimeSettings().maskIpAddressesInStaffMessages()
+        );
         String description = String.format(getMessage("discord.alert-desc-player"), playerName) + "\n" +
-                String.format(getMessage("discord.alert-desc-ip"), ip) + "\n" +
+                String.format(getMessage("discord.alert-desc-ip"), displayedIp) + "\n" +
                 String.format(getMessage("discord.alert-desc-discord"), targetDiscordId) + "\n\n" +
                 String.format(getMessage("discord.alert-desc-associated"), String.join(", ", associatedUsernames));
 

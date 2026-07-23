@@ -4,6 +4,7 @@ import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
+import net.justempire.discordverificator.utils.IpAddressUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -38,12 +39,16 @@ public class InfoCommand implements CommandExecutor {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 Map<String, String> info = userManager.getPlayerInfo(targetPlayer);
+                String displayedIp = IpAddressUtil.displayForStaff(
+                        info.get("current_ip"),
+                        plugin.getRuntimeSettings().maskIpAddressesInStaffMessages()
+                );
 
                 plugin.runOnMainThread(() -> {
                     commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
                     commandSender.sendMessage(MessageColorizer.colorize("&6&l Info for: &f" + targetPlayer));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 Discord ID: &f" + info.get("discord_id")));
-                    commandSender.sendMessage(MessageColorizer.colorize("&7 Allowed IP: &f" + info.get("current_ip")));
+                    commandSender.sendMessage(MessageColorizer.colorize("&7 Allowed IP: &f" + displayedIp));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 First Linked: &f" + info.get("linked_at")));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 Last Login: &f" + info.get("last_login")));
                     commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));

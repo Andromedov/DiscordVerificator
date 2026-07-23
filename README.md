@@ -49,6 +49,26 @@ To join the server, the player should run the seen command to the **Discord bot*
 - `discordVerificator.reload` _(for **operators** by default)_ — Allows to use `/dvreload`
 - `discordVerificator.info` _(for **operators** by default)_ — Allows to use `/info <player>`
 
+## 🔐 IP address privacy
+
+The plugin processes IP addresses for IP-change verification and shared-IP detection. Staff-facing
+output is masked by default:
+
+- `/dvinfo` and in-game security alerts are limited to users with the corresponding operator-only
+  permissions;
+- Discord security alerts are sent only to the configured staff channel;
+- IPv4 addresses are displayed in a form such as `192.168.*.*`, and IPv6 addresses expose no more
+  than the first two hextets;
+- historical IP and verification cooldown records are removed automatically after the configured
+  retention period (30 days by default);
+- the current allowed IP remains stored while the Discord account is linked because it is required
+  to detect an IP change. Unlinking the last account removes the user and its IP data through the
+  database foreign-key relationships.
+
+The SQLite database and server backups still contain sensitive data and should only be accessible
+to trusted administrators. Set `privacy.mask-ip-addresses-in-staff-messages` to `false` only when
+staff genuinely need full addresses and the staff channels are appropriately restricted.
+
 ## 📄 Default config
 > [!IMPORTANT]
 > You should replace `DISCORD_BOT_TOKEN` with your **Discord bot token**.<br>
@@ -70,6 +90,10 @@ default-max-accounts-per-ip: 1
 discord-alerts:
   channel-id: "" # E.g., "123456789012345678"
   admin-role-id: "" # The role ID required to click "Allow" / "Block" buttons
+
+privacy:
+  mask-ip-addresses-in-staff-messages: true
+  ip-history-retention-days: 30
 
 messages:
   "not-enough-permissions": "&cNot enough permissions!"

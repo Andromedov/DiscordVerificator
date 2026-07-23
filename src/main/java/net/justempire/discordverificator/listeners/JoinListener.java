@@ -8,6 +8,7 @@ import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.utils.MessageColorizer;
+import net.justempire.discordverificator.utils.IpAddressUtil;
 import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import net.md_5.bungee.api.chat.HoverEvent;
@@ -172,7 +173,11 @@ public class JoinListener implements Listener {
 
     private void sendAdminAlertMultiIp(String playerName, String ip, List<String> others, String currentDiscordId) {
         String neighbors = String.join(", ", others);
-        String message = String.format(getMessage("admin-alerts.multi-ip"), playerName, ip, neighbors);
+        String displayedIp = IpAddressUtil.displayForStaff(
+                ip,
+                plugin.getRuntimeSettings().maskIpAddressesInStaffMessages()
+        );
+        String message = String.format(getMessage("admin-alerts.multi-ip"), playerName, displayedIp, neighbors);
 
         TextComponent alert = new TextComponent(MessageColorizer.colorize(message + "\n"));
 

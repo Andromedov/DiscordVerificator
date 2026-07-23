@@ -15,6 +15,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -24,6 +25,13 @@ import java.util.logging.Logger;
 
 @SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection"})
 public class UserManager {
+    public record IpDataCleanupResult(
+            int orphanUsersDeleted,
+            int historicalIpsDeleted,
+            int verificationRecordsDeleted
+    ) {
+    }
+
     private enum RelinkResult {
         SUCCESS,
         SOURCE_NOT_FOUND,
@@ -309,12 +317,48 @@ public class UserManager {
     }
 
     public synchronized void unlinkUser(String minecraftUsername) throws NotFoundException {
-        String sql = "DELETE FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
-            pstmt.setString(1, minecraftUsername);
-            int rows = pstmt.executeUpdate();
-            if (rows == 0) throw new NotFoundException();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        try {
+            boolean unlinked = databaseService.executeInTransaction(connection -> {
+                String findDiscordId =
+                        "SELECT discord_id FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
+                String discordId;
+                try (PreparedStatement statement = connection.prepareStatement(findDiscordId)) {
+                    statement.setString(1, minecraftUsername);
+                    try (ResultSet resultSet = statement.executeQuery()) {
+                        if (!resultSet.next()) {
+                            return false;
+                        }
+                        discordId = resultSet.getString("discord_id");
+                    }
+                }
+
+                String deleteLink =
+                        "DELETE FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
+                try (PreparedStatement statement = connection.prepareStatement(deleteLink)) {
+                    statement.setString(1, minecraftUsername);
+                    statement.executeUpdate();
+                }
+
+                String deleteOrphanUser = """
+                        DELETE FROM users
+                        WHERE discord_id = ?
+                          AND NOT EXISTS (
+                              SELECT 1 FROM linked_accounts WHERE linked_accounts.discord_id = users.discord_id
+                          )
+                        """;
+                try (PreparedStatement statement = connection.prepareStatement(deleteOrphanUser)) {
+                    statement.setString(1, discordId);
+                    statement.executeUpdate();
+                }
+                return true;
+            });
+
+            if (!unlinked) {
+                throw new NotFoundException();
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to unlink Minecraft account", e);
+        }
     }
 
     public synchronized void relinkUser(String oldUsername, String newUsername) throws UserNotFoundException, MinecraftUsernameAlreadyLinkedException {
@@ -397,6 +441,69 @@ public class UserManager {
             }
         } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         throw new NoCodesFoundException();
+    }
+
+    public synchronized IpDataCleanupResult purgeExpiredIpData(int retentionDays) {
+        if (retentionDays < 1) {
+            throw new IllegalArgumentException("IP data retention must be at least one day");
+        }
+
+        Timestamp cutoff = Timestamp.from(Instant.now().minus(retentionDays, ChronoUnit.DAYS));
+        try {
+            return databaseService.executeInTransaction(connection -> {
+                int orphanUsersDeleted;
+                String deleteOrphanUsers = """
+                        DELETE FROM users
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM linked_accounts WHERE linked_accounts.discord_id = users.discord_id
+                        )
+                        """;
+                try (PreparedStatement statement = connection.prepareStatement(deleteOrphanUsers)) {
+                    orphanUsersDeleted = statement.executeUpdate();
+                }
+
+                int historicalIpsDeleted;
+                String deleteHistoricalIps = """
+                        DELETE FROM user_ips
+                        WHERE (
+                              last_seen IS NULL
+                              OR (typeof(last_seen) IN ('integer', 'real') AND last_seen < ?)
+                              OR (typeof(last_seen) = 'text' AND datetime(last_seen) < datetime(?))
+                          )
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM users
+                              WHERE users.discord_id = user_ips.discord_id
+                                AND users.current_allowed_ip = user_ips.ip_address
+                          )
+                        """;
+                try (PreparedStatement statement = connection.prepareStatement(deleteHistoricalIps)) {
+                    statement.setLong(1, cutoff.getTime());
+                    statement.setString(2, cutoff.toString());
+                    historicalIpsDeleted = statement.executeUpdate();
+                }
+
+                int verificationRecordsDeleted;
+                String deleteVerificationHistory = """
+                        DELETE FROM verification_history
+                        WHERE (typeof(last_received) IN ('integer', 'real') AND last_received < ?)
+                           OR (typeof(last_received) = 'text' AND datetime(last_received) < datetime(?))
+                        """;
+                try (PreparedStatement statement = connection.prepareStatement(deleteVerificationHistory)) {
+                    statement.setLong(1, cutoff.getTime());
+                    statement.setString(2, cutoff.toString());
+                    verificationRecordsDeleted = statement.executeUpdate();
+                }
+
+                return new IpDataCleanupResult(
+                        orphanUsersDeleted,
+                        historicalIpsDeleted,
+                        verificationRecordsDeleted
+                );
+            });
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to purge expired IP data", e);
+        }
     }
 
     public synchronized void onShutDown() { databaseService.closeConnection(); }
