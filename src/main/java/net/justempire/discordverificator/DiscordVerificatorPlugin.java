@@ -13,6 +13,7 @@ import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,6 +41,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     private Logger logger;
     private UserManager userManager;
     private ConfirmationCodeService confirmationCodeService;
+    private BukkitTask verificationCodeCleanupTask;
     private volatile DiscordBot discordBot;
 
     private volatile JDA currentJDA;
@@ -68,7 +70,13 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         String jsonPath = String.format("%s/users.json", getDataFolder());
         userManager = new UserManager(databaseService, jsonPath, logger);
 
-        confirmationCodeService = new ConfirmationCodeService();
+        confirmationCodeService = new ConfirmationCodeService(getVerificationCodeExpirationSeconds());
+        verificationCodeCleanupTask = getServer().getScheduler().runTaskTimerAsynchronously(
+                this,
+                confirmationCodeService::purgeExpiredCodes,
+                20L * 60,
+                20L * 60
+        );
 
         // Setting up the messages
         setupMessages();
@@ -91,6 +99,14 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (verificationCodeCleanupTask != null) {
+            verificationCodeCleanupTask.cancel();
+            verificationCodeCleanupTask = null;
+        }
+        if (confirmationCodeService != null) {
+            confirmationCodeService.clear();
+        }
+
         if (userManager != null) userManager.onShutDown(); // Closes DB connection
 
         shutdownBotSync();
@@ -241,6 +257,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                         reloadConfig();
                         mergeConfig();
                         setupMessages();
+                        confirmationCodeService.updateExpirationSeconds(getVerificationCodeExpirationSeconds());
                         setupBot();
                         logger.info("Reload complete!");
                     } finally {
@@ -296,6 +313,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 messages.put(key, langConfig.getString(key));
             }
         }
+    }
+
+    private long getVerificationCodeExpirationSeconds() {
+        return getConfig().getLong("verification-code.expiration-seconds", 300);
     }
 
     public static String getMessage(String key) {

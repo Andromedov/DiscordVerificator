@@ -31,3 +31,8 @@ discord-alerts:
 #   - be present on the required Discord server (if configured),
 #   - pass the multi-account/shared-IP check.
 require-ip-verification: true
+
+# Verification codes are single-use and only the latest code issued for a Minecraft account remains valid.
+# Allowed range: 30-3600 seconds. Values outside this range are clamped.
+verification-code:
+  expiration-seconds: 300

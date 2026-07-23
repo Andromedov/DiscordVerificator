@@ -159,7 +159,7 @@ public class JoinListener implements Listener {
             } catch (NoCodesFoundException ignored) {
             }
 
-            String code = confirmationCodeService.generateVerificationCode(playerName, ipAddress);
+            String code = confirmationCodeService.generateVerificationCode(discordId, playerName, ipAddress);
             userManager.updateLastTimeUserReceivedCode(discordId, ipAddress);
 
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER,

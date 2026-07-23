@@ -233,7 +233,7 @@ public class DiscordBot extends ListenerAdapter {
                 // Trying to get code data
                 UsernameAndIp codeData;
                 try {
-                    codeData = confirmationCodeService.getDataByCodeAndRemove(code.getAsString());
+                    codeData = confirmationCodeService.getDataByCodeAndRemove(code.getAsString(), discordId);
                 } catch (InvalidCodeException e) {
                     MessageEmbed embed = generateEmbed(getMessage("discord.invalid-code"), getMessage("discord.invalid-code-description"), 0xF63B2D);
                     event.getHook().sendMessageEmbeds(embed).queue();
