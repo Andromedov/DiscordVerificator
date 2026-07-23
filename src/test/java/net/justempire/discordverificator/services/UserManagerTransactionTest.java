@@ -16,7 +16,9 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class UserManagerTransactionTest {
     @TempDir
@@ -100,6 +102,21 @@ class UserManagerTransactionTest {
                 userManager.getDiscordIdByMinecraftUsername("SourcePlayer"));
         assertEquals("555555555555555555",
                 userManager.getDiscordIdByMinecraftUsername("TargetPlayer"));
+    }
+
+    @Test
+    void moderationUpdatesReportWhetherTargetExists() throws Exception {
+        String discordId = "666666666666666666";
+
+        assertFalse(userManager.setUserBlocked(discordId, true));
+        assertFalse(userManager.setAllowSharedIp(discordId, true));
+
+        userManager.linkUser(discordId, "ModeratedPlayer");
+
+        assertTrue(userManager.setUserBlocked(discordId, true));
+        assertTrue(userManager.setAllowSharedIp(discordId, true));
+        assertTrue(userManager.getFullUserByDiscordId(discordId).isBlocked());
+        assertTrue(userManager.getFullUserByDiscordId(discordId).isSharedIpAllowed());
     }
 
     private int countRows(String table, String column, String value) throws SQLException {

@@ -146,23 +146,27 @@ public class UserManager {
     }
 
     // Set Blocked Status
-    public synchronized void setUserBlocked(String discordId, boolean blocked) {
+    public synchronized boolean setUserBlocked(String discordId, boolean blocked) {
         String sql = "UPDATE users SET is_blocked = ? WHERE discord_id = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setInt(1, blocked ? 1 : 0);
             pstmt.setString(2, discordId);
-            pstmt.executeUpdate();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to update blocked status for Discord ID " + discordId, e);
+        }
     }
 
     // Set Allow Shared IP Status
-    public synchronized void setAllowSharedIp(String discordId, boolean allowed) {
+    public synchronized boolean setAllowSharedIp(String discordId, boolean allowed) {
         String sql = "UPDATE users SET allow_shared_ip = ? WHERE discord_id = ?";
         try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
             pstmt.setInt(1, allowed ? 1 : 0);
             pstmt.setString(2, discordId);
-            pstmt.executeUpdate();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+            return pstmt.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to update shared IP status for Discord ID " + discordId, e);
+        }
     }
 
     public synchronized Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {

@@ -46,17 +46,22 @@ public class DecisionCommand implements CommandExecutor {
                     } catch (UserNotFoundException ignored) { }
                 }
 
+                boolean updated;
                 if (action.equalsIgnoreCase("allow")) {
-                    userManager.setAllowSharedIp(discordId, true);
-                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                    updated = userManager.setAllowSharedIp(discordId, true);
                 } else if (action.equalsIgnoreCase("block")) {
-                    userManager.setUserBlocked(discordId, true);
-                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                    updated = userManager.setUserBlocked(discordId, true);
                 } else if (action.equalsIgnoreCase("unblock")) {
-                    userManager.setUserBlocked(discordId, false);
-                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                    updated = userManager.setUserBlocked(discordId, false);
                 } else {
                     plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-decision-format")));
+                    return;
+                }
+
+                if (updated) {
+                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                } else {
+                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));
                 }
             } catch (Exception e) {
                 plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));

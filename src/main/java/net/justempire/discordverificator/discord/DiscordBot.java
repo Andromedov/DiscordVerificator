@@ -28,6 +28,9 @@ import org.jetbrains.annotations.NotNull;
 
 import java.awt.Color;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -43,6 +46,7 @@ public class DiscordBot extends ListenerAdapter {
     private final Logger logger;
     private final UserManager userManager;
     private final ConfirmationCodeService confirmationCodeService;
+    private final Set<String> moderationActionsInProgress = ConcurrentHashMap.newKeySet();
 
     private volatile boolean botEnabled = false;
 
@@ -126,28 +130,59 @@ public class DiscordBot extends ListenerAdapter {
     @Override
     public void onButtonInteraction(@NotNull ButtonInteractionEvent event) {
         String id = event.getComponentId();
-        if (!id.startsWith("dv_")) return;
-
-        String adminRoleId = plugin.getRuntimeSettings().discordAdminRoleId();
-        if (adminRoleId != null && !adminRoleId.isEmpty()) {
-            if (event.getMember() == null || event.getMember().getRoles().stream().noneMatch(r -> r.getId().equals(adminRoleId))) {
-                event.reply(getMessage("discord.no-permission")).setEphemeral(true).queue();
-                return;
-            }
+        if (!id.startsWith("dv_")) {
+            return;
         }
 
-        event.deferEdit().queue();
+        Optional<DiscordModerationAction> parsedAction = DiscordModerationAction.parse(id);
+        if (parsedAction.isEmpty()) {
+            logger.warning("Rejected malformed Discord moderation action: " + id);
+            event.reply(getMessage("discord.invalid-action")).setEphemeral(true).queue();
+            return;
+        }
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        DiscordModerationAction action = parsedAction.get();
+        String adminRoleId = plugin.getRuntimeSettings().discordAdminRoleId();
+        if (adminRoleId == null || adminRoleId.isBlank()) {
+            logger.warning("Rejected Discord moderation action because discord-alerts.admin-role-id is not configured");
+            event.reply(getMessage("discord.moderation-disabled")).setEphemeral(true).queue();
+            return;
+        }
+
+        if (event.getMember() == null || event.getMember().getRoles().stream()
+                .noneMatch(role -> role.getId().equals(adminRoleId))) {
+            event.reply(getMessage("discord.no-permission")).setEphemeral(true).queue();
+            return;
+        }
+
+        String actionKey = event.getMessage().getId();
+        if (!moderationActionsInProgress.add(actionKey)) {
+            event.reply(getMessage("discord.decision-already-processing")).setEphemeral(true).queue();
+            return;
+        }
+
+        event.deferEdit().queue(hook -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
+                boolean updated = switch (action.type()) {
+                    case ALLOW -> userManager.setAllowSharedIp(action.targetDiscordId(), true);
+                    case BLOCK -> userManager.setUserBlocked(action.targetDiscordId(), true);
+                };
+
+                if (!updated) {
+                    moderationActionsInProgress.remove(actionKey);
+                    logger.warning("Discord moderation target was not found: " + action.targetDiscordId());
+                    hook.sendMessage(getMessage("discord.decision-target-not-found")).setEphemeral(true).queue();
+                    return;
+                }
+
+                if (event.getMessage().getEmbeds().isEmpty()) {
+                    throw new IllegalStateException("Moderation message does not contain an embed");
+                }
+
                 MessageEmbed oldEmbed = event.getMessage().getEmbeds().get(0);
                 EmbedBuilder newEmbed = new EmbedBuilder(oldEmbed);
 
-                if (id.startsWith("dv_allow_")) {
-                    String targetDiscordId = id.substring("dv_allow_".length());
-                    userManager.setAllowSharedIp(targetDiscordId, true);
-
-                    // Update the Embed message design
+                if (action.type() == DiscordModerationAction.Type.ALLOW) {
                     newEmbed.setColor(Color.GREEN);
                     newEmbed.addField(
                             getMessage("discord.decision-approved-title"),
@@ -155,11 +190,7 @@ public class DiscordBot extends ListenerAdapter {
                             false
                     );
 
-                } else if (id.startsWith("dv_block_")) {
-                    String targetDiscordId = id.substring("dv_block_".length());
-                    userManager.setUserBlocked(targetDiscordId, true);
-
-                    // Update the Embed message design
+                } else {
                     newEmbed.setColor(Color.RED);
                     newEmbed.addField(
                             getMessage("discord.decision-blocked-title"),
@@ -168,13 +199,28 @@ public class DiscordBot extends ListenerAdapter {
                     );
                 }
 
-                // Set the updated Embed and an empty component list
-                event.getHook().editOriginalEmbeds(newEmbed.build()).setComponents().queue();
+                String guildId = event.getGuild() == null ? "unknown" : event.getGuild().getId();
+                logger.info("Discord moderation action: moderator=" + event.getUser().getId()
+                        + ", action=" + action.type()
+                        + ", target=" + action.targetDiscordId()
+                        + ", guild=" + guildId
+                        + ", channel=" + event.getChannel().getId());
 
+                hook.editOriginalEmbeds(newEmbed.build()).setComponents().queue(
+                        ignored -> moderationActionsInProgress.remove(actionKey),
+                        error -> {
+                            moderationActionsInProgress.remove(actionKey);
+                            logger.log(Level.SEVERE, "Failed to update Discord moderation message", error);
+                        }
+                );
             } catch (Exception e) {
+                moderationActionsInProgress.remove(actionKey);
                 logger.log(Level.SEVERE, "Error handling button interaction", e);
-                event.getHook().sendMessage(getMessage("discord.error-saving")).setEphemeral(true).queue();
+                hook.sendMessage(getMessage("discord.error-saving")).setEphemeral(true).queue();
             }
+        }), error -> {
+            moderationActionsInProgress.remove(actionKey);
+            logger.log(Level.WARNING, "Failed to acknowledge Discord moderation action", error);
         });
     }
 
@@ -204,7 +250,19 @@ public class DiscordBot extends ListenerAdapter {
 
         embed.setDescription(description);
 
-        // Sends security alert embed with interactive trust/block buttons
+        String adminRoleId = plugin.getRuntimeSettings().discordAdminRoleId();
+        if (adminRoleId == null || adminRoleId.isBlank()) {
+            logger.warning("Security alert sent without moderation buttons because discord-alerts.admin-role-id is not configured");
+            channel.sendMessageEmbeds(embed.build()).queue();
+            return;
+        }
+
+        if (DiscordModerationAction.parse("dv_allow_" + targetDiscordId).isEmpty()) {
+            logger.warning("Security alert sent without moderation buttons because target Discord ID is invalid");
+            channel.sendMessageEmbeds(embed.build()).queue();
+            return;
+        }
+
         channel.sendMessageEmbeds(embed.build())
                 .setComponents(ActionRow.of(
                         Button.success("dv_allow_" + targetDiscordId, getMessage("discord.button-trust")),
