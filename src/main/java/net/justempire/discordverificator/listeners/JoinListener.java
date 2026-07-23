@@ -41,6 +41,7 @@ public class JoinListener implements Listener {
     public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) {
         String playerName = event.getName();
         String ipAddress = event.getAddress().getHostAddress();
+        DiscordVerificatorPlugin.RuntimeSettings settings = plugin.getRuntimeSettings();
 
         User user;
         String discordId;
@@ -65,7 +66,7 @@ public class JoinListener implements Listener {
         }
 
         // --- CHECKING ATTENDANCE ON THE DISCORD SERVER ---
-        String requiredGuildId = plugin.getConfig().getString("required-guild-id");
+        String requiredGuildId = settings.requiredGuildId();
         // Enforces required Discord guild membership before login
         if (requiredGuildId != null && !requiredGuildId.isEmpty()) {
             DiscordBot.GuildMembershipStatus membershipStatus = discordBot.checkUserInGuild(discordId, requiredGuildId);
@@ -74,7 +75,7 @@ public class JoinListener implements Listener {
                     // Continue the login checks.
                 }
                 case NOT_MEMBER -> {
-                    String inviteLink = plugin.getConfig().getString("discord-invite-link", "https://discord.gg/");
+                    String inviteLink = settings.discordInviteLink();
                     String kickMessage = String.format(getMessage("in-game.not-in-discord-server"), inviteLink);
                     event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, kickMessage);
                     return;
@@ -119,7 +120,7 @@ public class JoinListener implements Listener {
             }
 
             if (!user.isSharedIpAllowed()) {
-                int globalLimit = plugin.getConfig().getInt("default-max-accounts-per-ip", 1);
+                int globalLimit = settings.defaultMaxAccountsPerIp();
 
                 if ((otherIds.size() + 1) > globalLimit) {
                     long currentTime = System.currentTimeMillis();
@@ -140,7 +141,7 @@ public class JoinListener implements Listener {
         }
 
         // --- IP-BASED CODE VERIFICATION (can be disabled via config) ---
-        boolean requireIpVerification = plugin.getConfig().getBoolean("require-ip-verification", true);
+        boolean requireIpVerification = settings.requireIpVerification();
 
         if (!requireIpVerification) {
             userManager.updatePlayerLoginTime(playerName, ipAddress);
@@ -196,11 +197,13 @@ public class JoinListener implements Listener {
     }
 
     private void broadcastToAdmins(TextComponent message) {
-        for (Player p : Bukkit.getOnlinePlayers()) {
-            if (p.hasPermission("discordVerificator.alerts")) {
-                p.spigot().sendMessage(message);
+        plugin.runOnMainThread(() -> {
+            for (Player player : Bukkit.getOnlinePlayers()) {
+                if (player.hasPermission("discordVerificator.alerts")) {
+                    player.spigot().sendMessage(message);
+                }
             }
-        }
+        });
     }
 
     private String getMessage(String key) {

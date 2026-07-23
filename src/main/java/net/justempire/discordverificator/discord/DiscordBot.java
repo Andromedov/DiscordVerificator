@@ -128,7 +128,7 @@ public class DiscordBot extends ListenerAdapter {
         String id = event.getComponentId();
         if (!id.startsWith("dv_")) return;
 
-        String adminRoleId = plugin.getConfig().getString("discord-alerts.admin-role-id");
+        String adminRoleId = plugin.getRuntimeSettings().discordAdminRoleId();
         if (adminRoleId != null && !adminRoleId.isEmpty()) {
             if (event.getMember() == null || event.getMember().getRoles().stream().noneMatch(r -> r.getId().equals(adminRoleId))) {
                 event.reply(getMessage("discord.no-permission")).setEphemeral(true).queue();
@@ -184,7 +184,7 @@ public class DiscordBot extends ListenerAdapter {
     public void sendSecurityAlert(String playerName, String ip, List<String> associatedUsernames, String targetDiscordId) {
         if (plugin.getJDA() == null) return;
 
-        String channelId = plugin.getConfig().getString("discord-alerts.channel-id");
+        String channelId = plugin.getRuntimeSettings().discordAlertChannelId();
         if (channelId == null || channelId.isEmpty()) return;
 
         TextChannel channel = plugin.getJDA().getTextChannelById(channelId);

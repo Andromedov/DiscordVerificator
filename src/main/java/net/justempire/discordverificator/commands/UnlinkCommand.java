@@ -37,11 +37,11 @@ public class UnlinkCommand implements CommandExecutor {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
                 userManager.unlinkUser(targetPlayer);
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-unlinked")));
+                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-unlinked")));
             } catch (NotFoundException e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
+                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (Exception e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
+                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
                 e.printStackTrace();
             }
         });

@@ -10,6 +10,8 @@ import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.DatabaseService;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
+import org.bukkit.Bukkit;
+import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -30,6 +32,17 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class DiscordVerificatorPlugin extends JavaPlugin {
+    public record RuntimeSettings(
+            String requiredGuildId,
+            String discordInviteLink,
+            int defaultMaxAccountsPerIp,
+            boolean requireIpVerification,
+            String discordAlertChannelId,
+            String discordAdminRoleId,
+            long verificationCodeExpirationSeconds
+    ) {
+    }
+
     public enum DiscordServiceState {
         STOPPED,
         STARTING,
@@ -47,15 +60,19 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     private volatile JDA currentJDA;
     private volatile DiscordServiceState discordServiceState = DiscordServiceState.STOPPED;
     private final AtomicLong discordLifecycleGeneration = new AtomicLong();
-    private static Map<String, String> messages = new HashMap<>();
+    private volatile RuntimeSettings runtimeSettings;
+    private static volatile Map<String, String> messages = Map.of();
 
     private volatile boolean isReloading = false;
+    private volatile boolean shuttingDown = false;
 
     @Override
     public void onEnable() {
         logger = this.getLogger();
+        shuttingDown = false;
 
         mergeConfig();
+        refreshRuntimeSettings();
 
         DatabaseService databaseService = new DatabaseService(getDataFolder().getAbsolutePath(), logger);
         try {
@@ -70,7 +87,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         String jsonPath = String.format("%s/users.json", getDataFolder());
         userManager = new UserManager(databaseService, jsonPath, logger);
 
-        confirmationCodeService = new ConfirmationCodeService(getVerificationCodeExpirationSeconds());
+        confirmationCodeService = new ConfirmationCodeService(runtimeSettings.verificationCodeExpirationSeconds());
         verificationCodeCleanupTask = getServer().getScheduler().runTaskTimerAsynchronously(
                 this,
                 confirmationCodeService::purgeExpiredCodes,
@@ -99,6 +116,8 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        shuttingDown = true;
+
         if (verificationCodeCleanupTask != null) {
             verificationCodeCleanupTask.cancel();
             verificationCodeCleanupTask = null;
@@ -164,6 +183,23 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         return currentJDA;
     }
 
+    public RuntimeSettings getRuntimeSettings() {
+        return runtimeSettings;
+    }
+
+    public void runOnMainThread(Runnable action) {
+        Objects.requireNonNull(action, "action");
+        if (Bukkit.isPrimaryThread()) {
+            action.run();
+        } else if (!shuttingDown) {
+            getServer().getScheduler().runTask(this, action);
+        }
+    }
+
+    public void sendMessageOnMainThread(CommandSender sender, String message) {
+        runOnMainThread(() -> sender.sendMessage(message));
+    }
+
     private void mergeConfig() {
         saveDefaultConfig();
         File configFile = new File(getDataFolder(), "config.yml");
@@ -221,7 +257,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
                 candidateJDA.awaitReady();
 
-                if (!isEnabled() || discordLifecycleGeneration.get() != generation) {
+                if (shuttingDown || discordLifecycleGeneration.get() != generation) {
                     candidateJDA.shutdownNow();
                     return;
                 }
@@ -256,8 +292,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                     try {
                         reloadConfig();
                         mergeConfig();
+                        refreshRuntimeSettings();
                         setupMessages();
-                        confirmationCodeService.updateExpirationSeconds(getVerificationCodeExpirationSeconds());
+                        confirmationCodeService.updateExpirationSeconds(runtimeSettings.verificationCodeExpirationSeconds());
                         setupBot();
                         logger.info("Reload complete!");
                     } finally {
@@ -272,7 +309,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     }
 
     private void setupMessages() {
-        messages = new HashMap<>();
+        Map<String, String> loadedMessages = new HashMap<>();
 
         File langFolder = new File(getDataFolder(), "lang");
         if (!langFolder.exists()) {
@@ -310,13 +347,22 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
         for (String key : langConfig.getKeys(true)) {
             if (langConfig.isString(key)) {
-                messages.put(key, langConfig.getString(key));
+                loadedMessages.put(key, langConfig.getString(key));
             }
         }
+        messages = Map.copyOf(loadedMessages);
     }
 
-    private long getVerificationCodeExpirationSeconds() {
-        return getConfig().getLong("verification-code.expiration-seconds", 300);
+    private void refreshRuntimeSettings() {
+        runtimeSettings = new RuntimeSettings(
+                getConfig().getString("required-guild-id", ""),
+                getConfig().getString("discord-invite-link", "https://discord.gg/"),
+                Math.max(1, getConfig().getInt("default-max-accounts-per-ip", 1)),
+                getConfig().getBoolean("require-ip-verification", true),
+                getConfig().getString("discord-alerts.channel-id", ""),
+                getConfig().getString("discord-alerts.admin-role-id", ""),
+                getConfig().getLong("verification-code.expiration-seconds", 300)
+        );
     }
 
     public static String getMessage(String key) {

@@ -39,18 +39,20 @@ public class InfoCommand implements CommandExecutor {
             try {
                 Map<String, String> info = userManager.getPlayerInfo(targetPlayer);
 
-                commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
-                commandSender.sendMessage(MessageColorizer.colorize("&6&l Info for: &f" + targetPlayer));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 Discord ID: &f" + info.get("discord_id")));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 Allowed IP: &f" + info.get("current_ip")));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 First Linked: &f" + info.get("linked_at")));
-                commandSender.sendMessage(MessageColorizer.colorize("&7 Last Login: &f" + info.get("last_login")));
-                commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
+                plugin.runOnMainThread(() -> {
+                    commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
+                    commandSender.sendMessage(MessageColorizer.colorize("&6&l Info for: &f" + targetPlayer));
+                    commandSender.sendMessage(MessageColorizer.colorize("&7 Discord ID: &f" + info.get("discord_id")));
+                    commandSender.sendMessage(MessageColorizer.colorize("&7 Allowed IP: &f" + info.get("current_ip")));
+                    commandSender.sendMessage(MessageColorizer.colorize("&7 First Linked: &f" + info.get("linked_at")));
+                    commandSender.sendMessage(MessageColorizer.colorize("&7 Last Login: &f" + info.get("last_login")));
+                    commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
+                });
 
             } catch (UserNotFoundException e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
+                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (Exception e) {
-                commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
+                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
                 e.printStackTrace();
             }
         });

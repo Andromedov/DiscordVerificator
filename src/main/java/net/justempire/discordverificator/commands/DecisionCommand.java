@@ -48,18 +48,18 @@ public class DecisionCommand implements CommandExecutor {
 
                 if (action.equalsIgnoreCase("allow")) {
                     userManager.setAllowSharedIp(discordId, true);
-                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
                 } else if (action.equalsIgnoreCase("block")) {
                     userManager.setUserBlocked(discordId, true);
-                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
                 } else if (action.equalsIgnoreCase("unblock")) {
                     userManager.setUserBlocked(discordId, false);
-                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
                 } else {
-                    sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-decision-format")));
+                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-decision-format")));
                 }
             } catch (Exception e) {
-                sender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));
+                plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));
                 plugin.getLogger().log(Level.SEVERE, "Failed to execute decision command", e);
             }
         });
