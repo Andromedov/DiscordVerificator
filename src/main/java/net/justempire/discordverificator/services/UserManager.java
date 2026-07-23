@@ -24,6 +24,12 @@ import java.util.logging.Logger;
 
 @SuppressWarnings({"SqlResolve", "SqlNoDataSourceInspection"})
 public class UserManager {
+    private enum RelinkResult {
+        SUCCESS,
+        SOURCE_NOT_FOUND,
+        TARGET_ALREADY_LINKED
+    }
+
     private final DatabaseService databaseService;
     private final Logger logger;
     private final String jsonPath;
@@ -260,19 +266,41 @@ public class UserManager {
     }
 
     public synchronized void linkUser(String discordId, String minecraftUsername) throws MinecraftUsernameAlreadyLinkedException {
-        try { upsertUser(discordId, ""); } catch (SQLException e) { return; }
+        try {
+            boolean linked = databaseService.executeInTransaction(connection -> {
+                String checkUsernameSql = "SELECT 1 FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
+                try (PreparedStatement pstmt = connection.prepareStatement(checkUsernameSql)) {
+                    pstmt.setString(1, minecraftUsername);
+                    if (pstmt.executeQuery().next()) {
+                        return false;
+                    }
+                }
 
-        String sql = "INSERT INTO linked_accounts (minecraft_username, discord_id, linked_at) VALUES (?, ?, ?)";
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sql)) {
-            pstmt.setString(1, minecraftUsername);
-            pstmt.setString(2, discordId);
-            pstmt.setTimestamp(3, Timestamp.from(Instant.now()));
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            if (e.getMessage().contains("PRIMARY KEY") || e.getMessage().contains("constraint")) {
+                String createUserSql = "INSERT INTO users (discord_id, current_allowed_ip) VALUES (?, '') " +
+                        "ON CONFLICT(discord_id) DO NOTHING";
+                try (PreparedStatement pstmt = connection.prepareStatement(createUserSql)) {
+                    pstmt.setString(1, discordId);
+                    pstmt.executeUpdate();
+                }
+
+                String createLinkSql = "INSERT INTO linked_accounts (minecraft_username, discord_id, linked_at) VALUES (?, ?, ?)";
+                try (PreparedStatement pstmt = connection.prepareStatement(createLinkSql)) {
+                    pstmt.setString(1, minecraftUsername);
+                    pstmt.setString(2, discordId);
+                    pstmt.setTimestamp(3, Timestamp.from(Instant.now()));
+                    pstmt.executeUpdate();
+                }
+                return true;
+            });
+
+            if (!linked) {
                 throw new MinecraftUsernameAlreadyLinkedException();
             }
-            logger.log(Level.SEVERE, "Database error", e);
+        } catch (SQLException e) {
+            if (isConstraintViolation(e)) {
+                throw new MinecraftUsernameAlreadyLinkedException();
+            }
+            throw new IllegalStateException("Failed to link Minecraft account", e);
         }
     }
 
@@ -286,47 +314,61 @@ public class UserManager {
     }
 
     public synchronized void relinkUser(String oldUsername, String newUsername) throws UserNotFoundException, MinecraftUsernameAlreadyLinkedException {
-        String discordId;
-        Timestamp linkedAt;
-        Timestamp lastLogin;
+        try {
+            RelinkResult result = databaseService.executeInTransaction(connection -> {
+                String findSourceSql = "SELECT 1 FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
+                try (PreparedStatement pstmt = connection.prepareStatement(findSourceSql)) {
+                    pstmt.setString(1, oldUsername);
+                    if (!pstmt.executeQuery().next()) {
+                        return RelinkResult.SOURCE_NOT_FOUND;
+                    }
+                }
 
-        String sqlSelect = "SELECT discord_id, linked_at, last_login FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
-        // Retrieves user linkage data or throws not found exception
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlSelect)) {
-            pstmt.setString(1, oldUsername);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                discordId = rs.getString("discord_id");
-                linkedAt = rs.getTimestamp("linked_at");
-                lastLogin = rs.getTimestamp("last_login");
-            } else throw new UserNotFoundException();
+                if (!oldUsername.equalsIgnoreCase(newUsername)) {
+                    String findTargetSql = "SELECT 1 FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
+                    try (PreparedStatement pstmt = connection.prepareStatement(findTargetSql)) {
+                        pstmt.setString(1, newUsername);
+                        if (pstmt.executeQuery().next()) {
+                            return RelinkResult.TARGET_ALREADY_LINKED;
+                        }
+                    }
+                }
+
+                String updateUsernameSql = "UPDATE linked_accounts SET minecraft_username = ? " +
+                        "WHERE minecraft_username = ? COLLATE NOCASE";
+                try (PreparedStatement pstmt = connection.prepareStatement(updateUsernameSql)) {
+                    pstmt.setString(1, newUsername);
+                    pstmt.setString(2, oldUsername);
+                    if (pstmt.executeUpdate() == 0) {
+                        return RelinkResult.SOURCE_NOT_FOUND;
+                    }
+                }
+                return RelinkResult.SUCCESS;
+            });
+
+            switch (result) {
+                case SUCCESS -> {
+                }
+                case SOURCE_NOT_FOUND -> throw new UserNotFoundException();
+                case TARGET_ALREADY_LINKED -> throw new MinecraftUsernameAlreadyLinkedException();
+            }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Database error", e);
-            throw new UserNotFoundException();
+            if (isConstraintViolation(e)) {
+                throw new MinecraftUsernameAlreadyLinkedException();
+            }
+            throw new IllegalStateException("Failed to relink Minecraft account", e);
         }
+    }
 
-        String sqlCheck = "SELECT discord_id FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlCheck)) {
-        // Verifies new username availability or throws MinecraftUsernameAlreadyLinkedException
-            pstmt.setString(1, newUsername);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) throw new MinecraftUsernameAlreadyLinkedException();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
-
-        try { unlinkUser(oldUsername); } catch (NotFoundException e) { throw new UserNotFoundException(); }
-
-        String sqlInsert = "INSERT INTO linked_accounts (minecraft_username, discord_id, linked_at, last_login) VALUES (?, ?, ?, ?)";
-        // Inserts linked account record; throws targeted exceptions on primary key or constraint violations
-        try (PreparedStatement pstmt = databaseService.getConnection().prepareStatement(sqlInsert)) {
-            pstmt.setString(1, newUsername);
-            pstmt.setString(2, discordId);
-            pstmt.setTimestamp(3, linkedAt != null ? linkedAt : Timestamp.from(Instant.now()));
-            pstmt.setTimestamp(4, lastLogin);
-            pstmt.executeUpdate();
-        } catch (SQLException e) {
-            if (e.getMessage().contains("PRIMARY KEY") || e.getMessage().contains("constraint")) throw new MinecraftUsernameAlreadyLinkedException();
-            logger.log(Level.SEVERE, "Database error", e);
+    private static boolean isConstraintViolation(SQLException exception) {
+        String message = exception.getMessage();
+        if (message == null) {
+            return false;
         }
+        String normalizedMessage = message.toLowerCase(java.util.Locale.ROOT);
+        return normalizedMessage.contains("sqlite_constraint_primarykey") ||
+                normalizedMessage.contains("sqlite_constraint_unique") ||
+                normalizedMessage.contains("unique constraint failed");
     }
 
     public synchronized void updateLastTimeUserReceivedCode(String discordId, String ip) {
