@@ -193,6 +193,21 @@ class UserManagerTransactionTest {
         );
     }
 
+    @Test
+    void sharedIpQueryFailsClosedOnDatabaseError() throws SQLException {
+        try (Statement statement = databaseService.getConnection().createStatement()) {
+            statement.execute("DROP TABLE user_ips");
+        }
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> userManager.getOtherDiscordIdsWithSameIp(
+                        "192.0.2.10",
+                        "123456789012345678"
+                )
+        );
+    }
+
     private int countRows(String table, String column, String value) throws SQLException {
         String sql = "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = ?";
         try (PreparedStatement statement = databaseService.getConnection().prepareStatement(sql)) {

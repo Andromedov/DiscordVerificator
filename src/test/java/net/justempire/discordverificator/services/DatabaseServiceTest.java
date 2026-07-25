@@ -101,6 +101,44 @@ class DatabaseServiceTest {
         }
     }
 
+    @Test
+    void migrationsAreIdempotent() throws SQLException {
+        databaseService.initialize();
+
+        try (Statement statement = databaseService.getConnection().createStatement();
+             ResultSet resultSet = statement.executeQuery("PRAGMA table_info(users)")) {
+            int manualAccessColumns = 0;
+            while (resultSet.next()) {
+                if ("manual_access_bypass".equals(resultSet.getString("name"))) {
+                    manualAccessColumns++;
+                }
+            }
+            assertEquals(1, manualAccessColumns);
+        }
+    }
+
+    @Test
+    void incompatibleLegacySchemaFailsInitialization() throws Exception {
+        Path brokenDirectory = temporaryDirectory.resolve("broken");
+        Files.createDirectories(brokenDirectory);
+        String brokenUrl = "jdbc:sqlite:" + brokenDirectory.resolve("database.db");
+
+        try (Connection connection = DriverManager.getConnection(brokenUrl);
+             Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE users (discord_id TEXT PRIMARY KEY)");
+        }
+
+        DatabaseService brokenService = new DatabaseService(
+                brokenDirectory.toString(),
+                Logger.getLogger(DatabaseServiceTest.class.getName() + ".broken")
+        );
+        try {
+            assertThrows(SQLException.class, brokenService::initialize);
+        } finally {
+            brokenService.closeConnection();
+        }
+    }
+
     private int readIntegerPragma(String pragma) throws SQLException {
         try (Statement statement = databaseService.getConnection().createStatement();
              ResultSet resultSet = statement.executeQuery("PRAGMA " + pragma)) {

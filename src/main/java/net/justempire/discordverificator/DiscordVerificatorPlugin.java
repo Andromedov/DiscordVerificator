@@ -141,20 +141,24 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             verificationCodeCleanupTask.cancel();
             verificationCodeCleanupTask = null;
         }
+        if (ipDataCleanupTask != null) {
+            ipDataCleanupTask.cancel();
+            ipDataCleanupTask = null;
+        }
+
+        shutdownBotSync();
+        getServer().getScheduler().cancelTasks(this);
+
         if (confirmationCodeService != null) {
             confirmationCodeService.clear();
         }
         if (pendingLoginAttemptService != null) {
             pendingLoginAttemptService.clear();
         }
-        if (ipDataCleanupTask != null) {
-            ipDataCleanupTask.cancel();
-            ipDataCleanupTask = null;
+        if (userManager != null) {
+            userManager.onShutDown();
         }
 
-        if (userManager != null) userManager.onShutDown(); // Closes DB connection
-
-        shutdownBotSync();
         logger.info("Shutting down!");
     }
 
@@ -304,8 +308,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         });
     }
 
-    public void reload() {
-        if (isReloading) return;
+    public synchronized boolean reload() {
+        if (isReloading || shuttingDown) {
+            return false;
+        }
         isReloading = true;
 
         logger.info("Reloading plugin...");
@@ -322,7 +328,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                         setupMessages();
                         confirmationCodeService.updateExpirationSeconds(runtimeSettings.verificationCodeExpirationSeconds());
                         setupBot();
-                        logger.info("Reload complete!");
+                        logger.info("Configuration reload complete; Discord reconnect started.");
+                    } catch (RuntimeException e) {
+                        logger.log(Level.SEVERE, "Reload failed while applying configuration", e);
                     } finally {
                         isReloading = false;
                     }
@@ -332,6 +340,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 logger.log(Level.SEVERE, "Reload failed!", e);
             }
         });
+        return true;
     }
 
     private void setupMessages() {
@@ -346,7 +355,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         if (!fallbackFile.exists()) {
             try {
                 saveResource("lang/en.yml", false);
-            } catch (IllegalArgumentException ignored) {}
+            } catch (IllegalArgumentException e) {
+                logger.log(Level.SEVERE, "Bundled fallback language resource lang/en.yml is missing", e);
+            }
         }
 
         String lang = getConfig().getString("language", "en");

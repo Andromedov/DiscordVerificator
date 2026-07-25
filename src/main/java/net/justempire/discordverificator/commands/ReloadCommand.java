@@ -28,8 +28,15 @@ public class ReloadCommand implements CommandExecutor {
             return true;
         }
 
-        plugin.reload();
-        commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.reloaded")));
+        if (plugin.reload()) {
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.reload-started")
+            ));
+        } else {
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.reload-in-progress")
+            ));
+        }
 
         return true;
     }

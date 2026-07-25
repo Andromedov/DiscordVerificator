@@ -13,6 +13,7 @@ import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
+import java.util.logging.Level;
 
 public class InfoCommand implements CommandExecutor {
     private final UserManager userManager;
@@ -71,7 +72,7 @@ public class InfoCommand implements CommandExecutor {
                 plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (Exception e) {
                 plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
-                e.printStackTrace();
+                plugin.getLogger().log(Level.SEVERE, "Failed to execute info command", e);
             }
         });
 

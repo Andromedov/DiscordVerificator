@@ -25,6 +25,7 @@ import org.bukkit.event.Listener;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
 
 public class JoinListener implements Listener {
     private final UserManager userManager;
@@ -49,6 +50,22 @@ public class JoinListener implements Listener {
 
     @EventHandler(priority = EventPriority.NORMAL)
     public void onPlayerPreLogin(AsyncPlayerPreLoginEvent event) {
+        try {
+            processPlayerPreLogin(event);
+        } catch (RuntimeException e) {
+            plugin.getLogger().log(
+                    Level.SEVERE,
+                    "Internal error while processing login for " + event.getName(),
+                    e
+            );
+            event.disallow(
+                    AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                    getMessage("in-game.security-check-unavailable")
+            );
+        }
+    }
+
+    private void processPlayerPreLogin(AsyncPlayerPreLoginEvent event) {
         String playerName = event.getName();
         String ipAddress = event.getAddress().getHostAddress();
         DiscordVerificatorPlugin.RuntimeSettings settings = plugin.getRuntimeSettings();

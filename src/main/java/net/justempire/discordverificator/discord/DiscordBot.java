@@ -69,10 +69,16 @@ public class DiscordBot extends ListenerAdapter {
         SlashCommandData commandData = Commands.slash("confirm", getMessage("discord.confirm-command"));
         commandData.addOption(OptionType.STRING, "code", getMessage("discord.verification-code-you-got"));
 
-        event.getJDA().updateCommands().addCommands(commandData).complete();
-
-        botEnabled = true;
-        logger.info("Bot started!");
+        event.getJDA().updateCommands().addCommands(commandData).queue(
+                commands -> {
+                    botEnabled = true;
+                    logger.info("Bot started and slash commands registered!");
+                },
+                error -> {
+                    botEnabled = false;
+                    logger.log(Level.SEVERE, "Failed to register Discord slash commands", error);
+                }
+        );
     }
 
     public boolean isBotEnabled() { return botEnabled; }

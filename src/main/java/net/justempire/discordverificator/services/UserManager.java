@@ -56,19 +56,48 @@ public class UserManager {
         ObjectMapper mapper = new ObjectMapper();
         try {
             List<User> oldUsers = mapper.readValue(jsonFile, new TypeReference<>() {});
+            boolean migrationSucceeded = true;
             for (User oldUser : oldUsers) {
                 try {
                     upsertUser(oldUser.getDiscordId(), oldUser.getCurrentAllowedIp());
+                    if (oldUser.linkedMinecraftUsernames == null) {
+                        continue;
+                    }
+
                     for (String mcName : oldUser.linkedMinecraftUsernames) {
-                        try { linkUser(oldUser.getDiscordId(), mcName); } catch (Exception ignored) {}
+                        try {
+                            linkUser(oldUser.getDiscordId(), mcName);
+                        } catch (MinecraftUsernameAlreadyLinkedException e) {
+                            try {
+                                String existingDiscordId = getDiscordIdByMinecraftUsername(mcName);
+                                if (!oldUser.getDiscordId().equals(existingDiscordId)) {
+                                    migrationSucceeded = false;
+                                    logger.warning("Cannot migrate Minecraft username " + mcName
+                                            + ": it is already linked to another Discord ID");
+                                }
+                            } catch (UserNotFoundException | RuntimeException lookupError) {
+                                migrationSucceeded = false;
+                                logger.log(
+                                        Level.WARNING,
+                                        "Could not verify an existing migrated link for " + mcName,
+                                        lookupError
+                                );
+                            }
+                        }
                     }
                 } catch (Exception e) {
+                    migrationSucceeded = false;
                     logger.log(Level.WARNING, "Error migrating user data for: " + oldUser.getDiscordId(), e);
                 }
             }
-            boolean renamed = jsonFile.renameTo(new File(jsonPath + ".old"));
-            if (!renamed) {
-                logger.warning("Failed to rename users.json to users.json.old");
+
+            if (migrationSucceeded) {
+                boolean renamed = jsonFile.renameTo(new File(jsonPath + ".old"));
+                if (!renamed) {
+                    logger.warning("Migration succeeded, but users.json could not be renamed to users.json.old");
+                }
+            } else {
+                logger.severe("users.json migration was incomplete; the source file was retained for recovery");
             }
         } catch (IOException e) {
             logger.log(Level.SEVERE, "Failed to read users.json", e);
@@ -93,7 +122,10 @@ public class UserManager {
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) return rs.getString("discord_id");
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Database error", e);
+            throw new IllegalStateException(
+                    "Failed to find Discord ID for Minecraft username " + minecraftUsername,
+                    e
+            );
         }
         throw new UserNotFoundException();
     }
@@ -121,7 +153,9 @@ public class UserManager {
                         manualAccessBypass
                 );
             }
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to load Discord user " + discordId, e);
+        }
         throw new UserNotFoundException();
     }
 
@@ -134,7 +168,9 @@ public class UserManager {
             pstmt.setString(2, excludeDiscordId);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) ids.add(rs.getString("discord_id"));
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to check shared IP associations", e);
+        }
         return ids;
     }
 
@@ -158,7 +194,9 @@ public class UserManager {
             }
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) usernames.add(rs.getString("minecraft_username"));
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to load Minecraft usernames for Discord IDs", e);
+        }
         return usernames;
     }
 
@@ -288,7 +326,12 @@ public class UserManager {
 
                 return info;
             }
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        } catch (SQLException e) {
+            throw new IllegalStateException(
+                    "Failed to load player information for " + minecraftUsername,
+                    e
+            );
+        }
         throw new UserNotFoundException();
     }
 
@@ -316,7 +359,14 @@ public class UserManager {
                 }
                 return null;
             });
-        } catch (UserNotFoundException | SQLException e) { logger.log(Level.SEVERE, "Database error or UserNotFound", e); }
+        } catch (UserNotFoundException e) {
+            throw new IllegalStateException(
+                    "Linked Minecraft account disappeared while updating login time",
+                    e
+            );
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to update player login time", e);
+        }
     }
 
     private synchronized List<String> getLinkedAccounts(String discordId) {
@@ -326,7 +376,9 @@ public class UserManager {
             pstmt.setString(1, discordId);
             ResultSet rs = pstmt.executeQuery();
             while (rs.next()) { accounts.add(rs.getString("minecraft_username")); }
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to load linked Minecraft accounts", e);
+        }
         return accounts;
     }
 
@@ -359,7 +411,7 @@ public class UserManager {
                 throw new UserNotFoundException();
             }
         } catch (SQLException e) {
-            logger.log(Level.SEVERE, "Database error while updating verified IP", e);
+            throw new IllegalStateException("Failed to update verified IP", e);
         }
     }
 
@@ -512,7 +564,9 @@ public class UserManager {
             pstmt.setString(2, ip);
             pstmt.setTimestamp(3, Timestamp.from(Instant.now()));
             pstmt.executeUpdate();
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to record verification request", e);
+        }
     }
 
     public synchronized long getSecondsSinceLastCode(String discordId, String ip) throws NoCodesFoundException {
@@ -525,7 +579,9 @@ public class UserManager {
                 Timestamp last = rs.getTimestamp("last_received");
                 return java.time.Duration.between(last.toInstant(), Instant.now()).getSeconds();
             }
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to load verification cooldown", e);
+        }
         throw new NoCodesFoundException();
     }
 

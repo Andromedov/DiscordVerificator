@@ -12,6 +12,8 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.logging.Level;
+
 public class RelinkCommand implements CommandExecutor {
     private final UserManager userManager;
     private final DiscordVerificatorPlugin plugin;
@@ -55,7 +57,7 @@ public class RelinkCommand implements CommandExecutor {
                 plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-already-linked")));
             } catch (Exception e) {
                 plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
-                e.printStackTrace();
+                plugin.getLogger().log(Level.SEVERE, "Failed to execute relink command", e);
             }
         });
 

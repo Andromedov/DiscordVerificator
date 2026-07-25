@@ -124,29 +124,69 @@ public class DatabaseService {
         }
     }
 
-    // Simple migration to add columns if they don't exist in existing DBs
-    private void performMigrations() {
-        try (Statement stmt = getConnection().createStatement()) {
-            try { stmt.execute("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
-            try { stmt.execute("ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
-            try { stmt.execute("ALTER TABLE users ADD COLUMN manual_access_bypass INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
-            try { stmt.execute("ALTER TABLE linked_accounts ADD COLUMN linked_at TIMESTAMP;"); } catch (SQLException ignored) {}
+    private void performMigrations() throws SQLException {
+        executeInTransaction(activeConnection -> {
+            addColumnIfMissing(
+                    activeConnection,
+                    "users",
+                    "is_blocked",
+                    "ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0"
+            );
+            addColumnIfMissing(
+                    activeConnection,
+                    "users",
+                    "allow_shared_ip",
+                    "ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0"
+            );
+            addColumnIfMissing(
+                    activeConnection,
+                    "users",
+                    "manual_access_bypass",
+                    "ALTER TABLE users ADD COLUMN manual_access_bypass INTEGER DEFAULT 0"
+            );
+            addColumnIfMissing(
+                    activeConnection,
+                    "linked_accounts",
+                    "linked_at",
+                    "ALTER TABLE linked_accounts ADD COLUMN linked_at TIMESTAMP"
+            );
 
-            stmt.execute("CREATE TABLE IF NOT EXISTS user_ips (" +
-                    "discord_id TEXT, " +
-                    "ip_address TEXT, " +
-                    "last_seen TIMESTAMP, " +
-                    "PRIMARY KEY (discord_id, ip_address), " +
-                    "FOREIGN KEY(discord_id) REFERENCES users(discord_id) ON DELETE CASCADE" +
-                    ");");
+            try (Statement statement = activeConnection.createStatement()) {
+                statement.executeUpdate("""
+                        INSERT OR IGNORE INTO user_ips (discord_id, ip_address, last_seen)
+                        SELECT discord_id, current_allowed_ip, CURRENT_TIMESTAMP
+                        FROM users
+                        WHERE current_allowed_ip IS NOT NULL AND current_allowed_ip != ''
+                        """);
+            }
+            return null;
+        });
+    }
 
-            // Backfill existing IPs into the history
-            try {
-                stmt.execute("INSERT OR IGNORE INTO user_ips (discord_id, ip_address, last_seen) " +
-                        "SELECT discord_id, current_allowed_ip, CURRENT_TIMESTAMP FROM users " +
-                        "WHERE current_allowed_ip IS NOT NULL AND current_allowed_ip != '';");
-            } catch (SQLException ignored) {}
+    private void addColumnIfMissing(
+            Connection activeConnection,
+            String tableName,
+            String columnName,
+            String alterSql
+    ) throws SQLException {
+        if (columnExists(activeConnection, tableName, columnName)) {
+            return;
+        }
+        try (Statement statement = activeConnection.createStatement()) {
+            statement.execute(alterSql);
+        }
+    }
 
-        } catch (SQLException e) { logger.log(Level.SEVERE, "Failed to perform database migrations", e); }
+    private boolean columnExists(Connection activeConnection, String tableName, String columnName)
+            throws SQLException {
+        try (Statement statement = activeConnection.createStatement();
+             ResultSet resultSet = statement.executeQuery("PRAGMA table_info(" + tableName + ")")) {
+            while (resultSet.next()) {
+                if (columnName.equalsIgnoreCase(resultSet.getString("name"))) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 }
