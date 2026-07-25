@@ -42,12 +42,17 @@ To join the server, the player should run the seen command to the **Discord bot*
 - `/relink <old_player> <new_player>` — relinks the player from its minecraft username to another one.
 - `/dvreload` — reloads the plugin (_including Discord bot_).
 - `/dvinfo <player>` — shows information about the player.
+- `/dvdecision <allow|block|unblock> <discordId|player>` — handles a shared-IP security decision.
+  `allow` grants the selected Discord account a full shared-IP bypass; it does not assign a numeric
+  per-user limit. A blocked account remains blocked even if this bypass is enabled.
   
 ## 🔞 Permissions
 - `discordVerificator.link` _(for **operators** by default)_ — Allows to use `/link <player> <discordId>`
 - `discordVerificator.unlink` _(for **operators** by default)_ — Allows to use `/unlink <player>`
 - `discordVerificator.reload` _(for **operators** by default)_ — Allows to use `/dvreload`
 - `discordVerificator.info` _(for **operators** by default)_ — Allows to use `/info <player>`
+- `discordVerificator.alerts` _(for **operators** by default)_ — Receives security alerts and allows
+  use of `/dvdecision`
 
 ## 🔐 IP address privacy
 
@@ -82,8 +87,9 @@ staff genuinely need full addresses and the staff channels are appropriately res
 # 5. Give your players access to send a command to the bot (e.g., invite it to your Discord server)
 token: "DISCORD_BOT_TOKEN"
 
-# Global limit for how many accounts can play from one IP address
-# Note: You can override this for specific users using /dvdecision allow <discordId | playerName> <amount>
+# Maximum number of distinct linked Discord accounts that may share one IP address.
+# /dvdecision allow <discordId | playerName> grants a full shared-IP bypass.
+# Blocked status always takes priority over this bypass.
 default-max-accounts-per-ip: 1
 
 # If configured, multi-account alerts will be sent directly to your Discord staff channel

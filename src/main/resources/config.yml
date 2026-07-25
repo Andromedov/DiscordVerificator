@@ -8,8 +8,9 @@ token: "DISCORD_BOT_TOKEN"
 # Language configuration. Available files in the lang folder: en, ua
 language: en
 
-# Global limit for how many accounts can play from one IP address
-# Note: You can override this for specific users using /dvdecision allow <discordId | playerName> <amount>
+# Maximum number of distinct linked Discord accounts that may share one IP address.
+# Minimum: 1. /dvdecision allow <discordId | playerName> grants that Discord account a full
+# shared-IP bypass; it does not set a separate numeric limit. /dvdecision block still takes priority.
 default-max-accounts-per-ip: 1
 
 # The ID of your Discord server (guild). If a player isn't on the server, they won't be allowed in.

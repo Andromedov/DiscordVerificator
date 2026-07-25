@@ -8,6 +8,7 @@ import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.listeners.JoinListener;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.DatabaseService;
+import net.justempire.discordverificator.services.SharedIpPolicy;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.Bukkit;
@@ -367,10 +368,16 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     }
 
     private void refreshRuntimeSettings() {
+        int configuredMaxAccounts = getConfig().getInt("default-max-accounts-per-ip", 1);
+        int normalizedMaxAccounts = SharedIpPolicy.normalizeMaximumAccounts(configuredMaxAccounts);
+        if (configuredMaxAccounts != normalizedMaxAccounts) {
+            logger.warning("default-max-accounts-per-ip must be at least 1; using 1.");
+        }
+
         runtimeSettings = new RuntimeSettings(
                 getConfig().getString("required-guild-id", ""),
                 getConfig().getString("discord-invite-link", "https://discord.gg/"),
-                Math.max(1, getConfig().getInt("default-max-accounts-per-ip", 1)),
+                normalizedMaxAccounts,
                 getConfig().getBoolean("require-ip-verification", true),
                 getConfig().getString("discord-alerts.channel-id", ""),
                 getConfig().getString("discord-alerts.admin-role-id", ""),

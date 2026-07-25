@@ -5,6 +5,7 @@ import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.exceptions.NoCodesFoundException;
 import net.justempire.discordverificator.models.User;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
+import net.justempire.discordverificator.services.SharedIpPolicy;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.utils.MessageColorizer;
@@ -120,24 +121,24 @@ public class JoinListener implements Listener {
                 return;
             }
 
-            if (!user.isSharedIpAllowed()) {
-                int globalLimit = settings.defaultMaxAccountsPerIp();
+            if (SharedIpPolicy.isLimitExceeded(
+                    otherIds.size(),
+                    settings.defaultMaxAccountsPerIp(),
+                    user.isSharedIpAllowed()
+            )) {
+                long currentTime = System.currentTimeMillis();
 
-                if ((otherIds.size() + 1) > globalLimit) {
-                    long currentTime = System.currentTimeMillis();
+                if (currentTime - alertCooldowns.getOrDefault(playerName, 0L) > ALERT_COOLDOWN_MS) {
+                    List<String> associatedUsernames = userManager.getMinecraftUsernamesByDiscordIds(otherIds);
 
-                    if (currentTime - alertCooldowns.getOrDefault(playerName, 0L) > ALERT_COOLDOWN_MS) {
-                        List<String> associatedUsernames = userManager.getMinecraftUsernamesByDiscordIds(otherIds);
+                    sendAdminAlertMultiIp(playerName, ipAddress, associatedUsernames, discordId);
+                    discordBot.sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
 
-                        sendAdminAlertMultiIp(playerName, ipAddress, associatedUsernames, discordId);
-                        discordBot.sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
-
-                        alertCooldowns.put(playerName, currentTime);
-                    }
-
-                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.security-check"));
-                    return;
+                    alertCooldowns.put(playerName, currentTime);
                 }
+
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.security-check"));
+                return;
             }
         }
 
