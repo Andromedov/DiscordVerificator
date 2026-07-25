@@ -3,6 +3,7 @@ package net.justempire.discordverificator.commands;
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.MinecraftUsernameAlreadyLinkedException;
+import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -31,13 +32,22 @@ public class LinkCommand implements CommandExecutor {
             return true;
         }
 
-        String playerName = arguments[0];
-        String discordUserId = arguments[1];
+        var parsedPlayerName = AccountIdentifierUtil.parseMinecraftUsername(arguments[0]);
+        if (parsedPlayerName.isEmpty()) {
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.invalid-minecraft-username-format")
+            ));
+            return true;
+        }
 
-        if (discordUserId.length() < 17) {
+        var parsedDiscordId = AccountIdentifierUtil.parseDiscordId(arguments[1]);
+        if (parsedDiscordId.isEmpty()) {
             commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-user-id-format")));
             return true;
         }
+
+        String playerName = parsedPlayerName.get();
+        String discordUserId = parsedDiscordId.get();
 
         // Run database operation asynchronously
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {

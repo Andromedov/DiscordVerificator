@@ -4,6 +4,7 @@ import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.PendingLoginAttemptService;
 import net.justempire.discordverificator.services.UserManager;
+import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.IpAddressUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.Bukkit;
@@ -44,8 +45,18 @@ public class ManualConfirmCommand implements CommandExecutor {
             return true;
         }
 
-        if (args.length == 2 && args[0].toLowerCase(Locale.ROOT).equals("revoke")) {
-            revoke(sender, args[1]);
+        if (args.length > 0 && args[0].toLowerCase(Locale.ROOT).equals("revoke")) {
+            if (args.length != 2) {
+                sender.sendMessage(message("in-game.manual-confirm-usage"));
+                return true;
+            }
+
+            var parsedMinecraftUsername = AccountIdentifierUtil.parseMinecraftUsername(args[1]);
+            if (parsedMinecraftUsername.isEmpty()) {
+                sender.sendMessage(message("in-game.invalid-minecraft-username-format"));
+                return true;
+            }
+            revoke(sender, parsedMinecraftUsername.get());
             return true;
         }
 
@@ -54,7 +65,12 @@ public class ManualConfirmCommand implements CommandExecutor {
             return true;
         }
 
-        String minecraftUsername = args[0];
+        var parsedMinecraftUsername = AccountIdentifierUtil.parseMinecraftUsername(args[0]);
+        if (parsedMinecraftUsername.isEmpty()) {
+            sender.sendMessage(message("in-game.invalid-minecraft-username-format"));
+            return true;
+        }
+        String minecraftUsername = parsedMinecraftUsername.get();
         Optional<PendingLoginAttemptService.PendingLoginAttempt> claimedAttempt =
                 pendingLoginAttempts.claimRecentAttempt(minecraftUsername);
         if (claimedAttempt.isEmpty()) {

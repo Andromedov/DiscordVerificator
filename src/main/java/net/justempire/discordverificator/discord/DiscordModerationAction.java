@@ -1,12 +1,14 @@
 package net.justempire.discordverificator.discord;
 
+import net.justempire.discordverificator.utils.AccountIdentifierUtil;
+
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 record DiscordModerationAction(Type type, String targetDiscordId) {
     private static final Pattern COMPONENT_ID_PATTERN =
-            Pattern.compile("^dv_(allow|block)_(\\d{17,20})$");
+            Pattern.compile("^dv_(allow|block)_(.+)$");
 
     static Optional<DiscordModerationAction> parse(String componentId) {
         if (componentId == null) {
@@ -18,12 +20,17 @@ record DiscordModerationAction(Type type, String targetDiscordId) {
             return Optional.empty();
         }
 
+        Optional<String> targetDiscordId = AccountIdentifierUtil.parseDiscordId(matcher.group(2));
+        if (targetDiscordId.isEmpty()) {
+            return Optional.empty();
+        }
+
         Type type = switch (matcher.group(1)) {
             case "allow" -> Type.ALLOW;
             case "block" -> Type.BLOCK;
             default -> throw new IllegalStateException("Unexpected moderation action");
         };
-        return Optional.of(new DiscordModerationAction(type, matcher.group(2)));
+        return Optional.of(new DiscordModerationAction(type, targetDiscordId.get()));
     }
 
     enum Type {

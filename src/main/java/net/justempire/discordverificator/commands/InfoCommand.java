@@ -3,6 +3,7 @@ package net.justempire.discordverificator.commands;
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
+import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import net.justempire.discordverificator.utils.IpAddressUtil;
 import org.bukkit.Bukkit;
@@ -30,11 +31,20 @@ public class InfoCommand implements CommandExecutor {
         }
 
         if (arguments.length != 1) {
-            commandSender.sendMessage(MessageColorizer.colorize("&cUsage: /dvinfo <player>"));
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.invalid-info-format")
+            ));
             return true;
         }
 
-        String targetPlayer = arguments[0];
+        var parsedTargetPlayer = AccountIdentifierUtil.parseMinecraftUsername(arguments[0]);
+        if (parsedTargetPlayer.isEmpty()) {
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.invalid-minecraft-username-format")
+            ));
+            return true;
+        }
+        String targetPlayer = parsedTargetPlayer.get();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {

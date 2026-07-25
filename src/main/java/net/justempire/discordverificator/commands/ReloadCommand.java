@@ -21,6 +21,13 @@ public class ReloadCommand implements CommandExecutor {
             return true;
         }
 
+        if (arguments.length != 0) {
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.invalid-reload-format")
+            ));
+            return true;
+        }
+
         plugin.reload();
         commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.reloaded")));
 

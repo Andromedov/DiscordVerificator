@@ -4,6 +4,7 @@ import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.exceptions.MinecraftUsernameAlreadyLinkedException;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
+import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -32,8 +33,17 @@ public class RelinkCommand implements CommandExecutor {
             return true;
         }
 
-        String oldPlayerName = arguments[0];
-        String newPlayerName = arguments[1];
+        var parsedOldPlayerName = AccountIdentifierUtil.parseMinecraftUsername(arguments[0]);
+        var parsedNewPlayerName = AccountIdentifierUtil.parseMinecraftUsername(arguments[1]);
+        if (parsedOldPlayerName.isEmpty() || parsedNewPlayerName.isEmpty()) {
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.invalid-minecraft-username-format")
+            ));
+            return true;
+        }
+
+        String oldPlayerName = parsedOldPlayerName.get();
+        String newPlayerName = parsedNewPlayerName.get();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {

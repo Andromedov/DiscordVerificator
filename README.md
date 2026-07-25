@@ -49,6 +49,14 @@ To join the server, the player should run the seen command to the **Discord bot*
   login IP and enables manual access without Discord bot readiness, guild membership, or Discord
   confirmation codes.
 - `/dvconfirm revoke <player>` — revokes manual access and restores the normal Discord checks.
+
+Command identifiers are validated consistently:
+
+- Minecraft usernames must contain 3-16 ASCII letters, digits, or underscores and are normalized
+  to lowercase for database operations;
+- Discord IDs must contain exactly 17-20 decimal digits;
+- commands that accept either identifier reject all other values instead of treating them as an
+  arbitrary Discord ID.
   
 ## 🔞 Permissions
 - `discordVerificator.link` _(for **operators** by default)_ — Allows to use `/link <player> <discordId>`

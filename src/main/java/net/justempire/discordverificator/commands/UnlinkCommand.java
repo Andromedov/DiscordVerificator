@@ -3,6 +3,7 @@ package net.justempire.discordverificator.commands;
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.NotFoundException;
+import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -31,7 +32,14 @@ public class UnlinkCommand implements CommandExecutor {
             return true;
         }
 
-        String targetPlayer = arguments[0];
+        var parsedTargetPlayer = AccountIdentifierUtil.parseMinecraftUsername(arguments[0]);
+        if (parsedTargetPlayer.isEmpty()) {
+            commandSender.sendMessage(MessageColorizer.colorize(
+                    DiscordVerificatorPlugin.getMessage("in-game.invalid-minecraft-username-format")
+            ));
+            return true;
+        }
+        String targetPlayer = parsedTargetPlayer.get();
 
         // Run database operation asynchronously
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
