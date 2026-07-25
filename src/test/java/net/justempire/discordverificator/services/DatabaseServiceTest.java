@@ -6,6 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
+import java.nio.file.Files;
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
@@ -55,6 +58,46 @@ class DatabaseServiceTest {
              ResultSet resultSet = statement.executeQuery("SELECT COUNT(*) FROM users WHERE discord_id = '123'")) {
             assertTrue(resultSet.next());
             assertEquals(0, resultSet.getInt(1));
+        }
+    }
+
+    @Test
+    void migratesManualAccessColumnForExistingUsersTable() throws Exception {
+        Path legacyDirectory = temporaryDirectory.resolve("legacy");
+        Files.createDirectories(legacyDirectory);
+        String legacyUrl = "jdbc:sqlite:" + legacyDirectory.resolve("database.db");
+
+        try (Connection connection = DriverManager.getConnection(legacyUrl);
+             Statement statement = connection.createStatement()) {
+            statement.execute("""
+                    CREATE TABLE users (
+                        discord_id TEXT PRIMARY KEY,
+                        current_allowed_ip TEXT,
+                        is_blocked INTEGER DEFAULT 0,
+                        allow_shared_ip INTEGER DEFAULT 0
+                    )
+                    """);
+            statement.execute("""
+                    INSERT INTO users (discord_id, current_allowed_ip)
+                    VALUES ('123456789012345678', '192.0.2.5')
+                    """);
+        }
+
+        DatabaseService legacyService = new DatabaseService(
+                legacyDirectory.toString(),
+                Logger.getLogger(DatabaseServiceTest.class.getName() + ".legacy")
+        );
+        try {
+            legacyService.initialize();
+            try (Statement statement = legacyService.getConnection().createStatement();
+                 ResultSet resultSet = statement.executeQuery(
+                         "SELECT manual_access_bypass FROM users WHERE discord_id = '123456789012345678'"
+                 )) {
+                assertTrue(resultSet.next());
+                assertEquals(0, resultSet.getInt("manual_access_bypass"));
+            }
+        } finally {
+            legacyService.closeConnection();
         }
     }
 

@@ -8,6 +8,7 @@ import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.listeners.JoinListener;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.DatabaseService;
+import net.justempire.discordverificator.services.PendingLoginAttemptService;
 import net.justempire.discordverificator.services.SharedIpPolicy;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
@@ -57,6 +58,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     private Logger logger;
     private UserManager userManager;
     private ConfirmationCodeService confirmationCodeService;
+    private PendingLoginAttemptService pendingLoginAttemptService;
     private BukkitTask verificationCodeCleanupTask;
     private BukkitTask ipDataCleanupTask;
     private volatile DiscordBot discordBot;
@@ -92,6 +94,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         userManager = new UserManager(databaseService, jsonPath, logger);
 
         confirmationCodeService = new ConfirmationCodeService(runtimeSettings.verificationCodeExpirationSeconds());
+        pendingLoginAttemptService = new PendingLoginAttemptService();
         verificationCodeCleanupTask = getServer().getScheduler().runTaskTimerAsynchronously(
                 this,
                 confirmationCodeService::purgeExpiredCodes,
@@ -111,7 +114,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         // Setting up the bot
         setupBot();
 
-        getServer().getPluginManager().registerEvents(new JoinListener(this, userManager, confirmationCodeService), this);
+        getServer().getPluginManager().registerEvents(
+                new JoinListener(this, userManager, confirmationCodeService, pendingLoginAttemptService),
+                this
+        );
 
         // Commands
         Objects.requireNonNull(getCommand("link")).setExecutor(new LinkCommand(this, userManager));
@@ -120,6 +126,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         Objects.requireNonNull(getCommand("dvreload")).setExecutor(new ReloadCommand(this));
         Objects.requireNonNull(getCommand("dvinfo")).setExecutor(new InfoCommand(this, userManager));
         Objects.requireNonNull(getCommand("dvdecision")).setExecutor(new DecisionCommand(this, userManager));
+        Objects.requireNonNull(getCommand("dvconfirm")).setExecutor(
+                new ManualConfirmCommand(this, userManager, pendingLoginAttemptService)
+        );
 
         logger.info("Enabled successfully!");
     }
@@ -134,6 +143,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         }
         if (confirmationCodeService != null) {
             confirmationCodeService.clear();
+        }
+        if (pendingLoginAttemptService != null) {
+            pendingLoginAttemptService.clear();
         }
         if (ipDataCleanupTask != null) {
             ipDataCleanupTask.cancel();

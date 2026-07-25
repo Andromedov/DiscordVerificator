@@ -22,17 +22,22 @@ public class User {
 
     private boolean isBlocked;
     private boolean allowSharedIp;
+    private boolean manualAccessBypass;
 
     // Empty constructor for Jackson
     public User() { }
 
-    public User(String discordUsername, List<String> minecraftUsernames, List<LastTimeUserReceivedCode> latestVerificationsFromIps, String currentAllowedIp, boolean isBlocked, boolean allowSharedIp) {
+    public User(String discordUsername, List<String> minecraftUsernames,
+                List<LastTimeUserReceivedCode> latestVerificationsFromIps,
+                String currentAllowedIp, boolean isBlocked, boolean allowSharedIp,
+                boolean manualAccessBypass) {
         this.discordId = discordUsername;
         this.linkedMinecraftUsernames = new ArrayList<>(minecraftUsernames);
         this.latestVerificationsFromIps = latestVerificationsFromIps;
         this.currentAllowedIp = currentAllowedIp;
         this.isBlocked = isBlocked;
         this.allowSharedIp = allowSharedIp;
+        this.manualAccessBypass = manualAccessBypass;
     }
 
     public String getDiscordId() {
@@ -49,5 +54,9 @@ public class User {
 
     public boolean isSharedIpAllowed() {
         return allowSharedIp;
+    }
+
+    public boolean isManualAccessBypassEnabled() {
+        return manualAccessBypass;
     }
 }

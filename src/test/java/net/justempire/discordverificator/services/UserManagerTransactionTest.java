@@ -172,6 +172,27 @@ class UserManagerTransactionTest {
         assertEquals(0, countRows("verification_history", "discord_id", discordId));
     }
 
+    @Test
+    void manualAccessConfirmationAtomicallyUpdatesIpAndCanBeRevoked() throws Exception {
+        String discordId = "101010101010101010";
+        String ipAddress = "203.0.113.50";
+        userManager.linkUser(discordId, "ConsoleConfirmed");
+
+        userManager.enableManualAccess("consoleconfirmed", ipAddress);
+
+        assertTrue(userManager.getFullUserByDiscordId(discordId).isManualAccessBypassEnabled());
+        assertEquals(ipAddress, userManager.getFullUserByDiscordId(discordId).getCurrentAllowedIp());
+        assertEquals(1, countRows("user_ips", "ip_address", ipAddress));
+
+        assertTrue(userManager.revokeManualAccess("ConsoleConfirmed"));
+        assertFalse(userManager.getFullUserByDiscordId(discordId).isManualAccessBypassEnabled());
+        assertFalse(userManager.revokeManualAccess("MissingPlayer"));
+        assertThrows(
+                UserNotFoundException.class,
+                () -> userManager.enableManualAccess("MissingPlayer", ipAddress)
+        );
+    }
+
     private int countRows(String table, String column, String value) throws SQLException {
         String sql = "SELECT COUNT(*) FROM " + table + " WHERE " + column + " = ?";
         try (PreparedStatement statement = databaseService.getConnection().prepareStatement(sql)) {

@@ -109,8 +109,17 @@ public class UserManager {
                 String ip = rs.getString("current_allowed_ip");
                 boolean isBlocked = rs.getInt("is_blocked") == 1;
                 boolean allowSharedIp = rs.getInt("allow_shared_ip") == 1;
+                boolean manualAccessBypass = rs.getInt("manual_access_bypass") == 1;
 
-                return new User(id, getLinkedAccounts(id), null, ip, isBlocked, allowSharedIp);
+                return new User(
+                        id,
+                        getLinkedAccounts(id),
+                        null,
+                        ip,
+                        isBlocked,
+                        allowSharedIp,
+                        manualAccessBypass
+                );
             }
         } catch (SQLException e) { logger.log(Level.SEVERE, "Database error", e); }
         throw new UserNotFoundException();
@@ -177,8 +186,84 @@ public class UserManager {
         }
     }
 
+    public synchronized void enableManualAccess(String minecraftUsername, String ipAddress)
+            throws UserNotFoundException {
+        try {
+            boolean enabled = databaseService.executeInTransaction(connection -> {
+                String findUser = """
+                        SELECT discord_id
+                        FROM linked_accounts
+                        WHERE minecraft_username = ? COLLATE NOCASE
+                        """;
+                String discordId;
+                try (PreparedStatement statement = connection.prepareStatement(findUser)) {
+                    statement.setString(1, minecraftUsername);
+                    try (ResultSet resultSet = statement.executeQuery()) {
+                        if (!resultSet.next()) {
+                            return false;
+                        }
+                        discordId = resultSet.getString("discord_id");
+                    }
+                }
+
+                String updateUser = """
+                        UPDATE users
+                        SET current_allowed_ip = ?, manual_access_bypass = 1
+                        WHERE discord_id = ?
+                        """;
+                try (PreparedStatement statement = connection.prepareStatement(updateUser)) {
+                    statement.setString(1, ipAddress);
+                    statement.setString(2, discordId);
+                    if (statement.executeUpdate() == 0) {
+                        return false;
+                    }
+                }
+
+                String updateIpHistory = """
+                        INSERT INTO user_ips (discord_id, ip_address, last_seen)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(discord_id, ip_address) DO UPDATE SET last_seen = ?
+                        """;
+                try (PreparedStatement statement = connection.prepareStatement(updateIpHistory)) {
+                    Timestamp now = Timestamp.from(Instant.now());
+                    statement.setString(1, discordId);
+                    statement.setString(2, ipAddress);
+                    statement.setTimestamp(3, now);
+                    statement.setTimestamp(4, now);
+                    statement.executeUpdate();
+                }
+                return true;
+            });
+
+            if (!enabled) {
+                throw new UserNotFoundException();
+            }
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to enable manual access", e);
+        }
+    }
+
+    public synchronized boolean revokeManualAccess(String minecraftUsername) {
+        String sql = """
+                UPDATE users
+                SET manual_access_bypass = 0
+                WHERE discord_id = (
+                    SELECT discord_id
+                    FROM linked_accounts
+                    WHERE minecraft_username = ? COLLATE NOCASE
+                )
+                """;
+        try (PreparedStatement statement = databaseService.getConnection().prepareStatement(sql)) {
+            statement.setString(1, minecraftUsername);
+            return statement.executeUpdate() > 0;
+        } catch (SQLException e) {
+            throw new IllegalStateException("Failed to revoke manual access", e);
+        }
+    }
+
     public synchronized Map<String, String> getPlayerInfo(String minecraftUsername) throws UserNotFoundException {
-        String sql = "SELECT l.discord_id, l.last_login, l.linked_at, u.current_allowed_ip, u.is_blocked, u.allow_shared_ip " +
+        String sql = "SELECT l.discord_id, l.last_login, l.linked_at, u.current_allowed_ip, " +
+                "u.is_blocked, u.allow_shared_ip, u.manual_access_bypass " +
                 "FROM linked_accounts l " +
                 "JOIN users u ON l.discord_id = u.discord_id " +
                 "WHERE l.minecraft_username = ? COLLATE NOCASE";
@@ -193,6 +278,7 @@ public class UserManager {
                 info.put("current_ip", rs.getString("current_allowed_ip"));
                 info.put("is_blocked", rs.getInt("is_blocked") == 1 ? "Yes" : "No");
                 info.put("is_trusted_bypass", rs.getInt("allow_shared_ip") == 1 ? "Yes" : "No");
+                info.put("manual_access_bypass", rs.getInt("manual_access_bypass") == 1 ? "Yes" : "No");
 
                 Timestamp linkedAt = rs.getTimestamp("linked_at");
                 info.put("linked_at", linkedAt != null ? linkedAt.toString() : "Unknown");

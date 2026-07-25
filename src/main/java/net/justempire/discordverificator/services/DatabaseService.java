@@ -86,7 +86,8 @@ public class DatabaseService {
                 "discord_id TEXT PRIMARY KEY, " +
                 "current_allowed_ip TEXT, " +
                 "is_blocked INTEGER DEFAULT 0, " +
-                "allow_shared_ip INTEGER DEFAULT 0" +
+                "allow_shared_ip INTEGER DEFAULT 0, " +
+                "manual_access_bypass INTEGER DEFAULT 0" +
                 ");";
 
         String createLinksTable = "CREATE TABLE IF NOT EXISTS linked_accounts (" +
@@ -128,6 +129,7 @@ public class DatabaseService {
         try (Statement stmt = getConnection().createStatement()) {
             try { stmt.execute("ALTER TABLE users ADD COLUMN is_blocked INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
             try { stmt.execute("ALTER TABLE users ADD COLUMN allow_shared_ip INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
+            try { stmt.execute("ALTER TABLE users ADD COLUMN manual_access_bypass INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
             try { stmt.execute("ALTER TABLE linked_accounts ADD COLUMN linked_at TIMESTAMP;"); } catch (SQLException ignored) {}
 
             stmt.execute("CREATE TABLE IF NOT EXISTS user_ips (" +

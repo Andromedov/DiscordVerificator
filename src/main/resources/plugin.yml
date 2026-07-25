@@ -22,6 +22,9 @@ commands:
   dvdecision:
     description: Internal command for handling alerts
     usage: dvdecision <allow|block|unblock> <discordId>
+  dvconfirm:
+    description: Console-only emergency confirmation of a recent player IP
+    usage: dvconfirm <Player> | dvconfirm revoke <Player>
 
 permissions:
   discordVerificator.link:

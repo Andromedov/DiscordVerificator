@@ -5,6 +5,7 @@ import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.exceptions.NoCodesFoundException;
 import net.justempire.discordverificator.models.User;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
+import net.justempire.discordverificator.services.PendingLoginAttemptService;
 import net.justempire.discordverificator.services.SharedIpPolicy;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
@@ -29,14 +30,21 @@ public class JoinListener implements Listener {
     private final UserManager userManager;
     private final DiscordVerificatorPlugin plugin;
     private final ConfirmationCodeService confirmationCodeService;
+    private final PendingLoginAttemptService pendingLoginAttempts;
 
     private final Map<String, Long> alertCooldowns = new ConcurrentHashMap<>();
     private static final long ALERT_COOLDOWN_MS = 3 * 60 * 60 * 1000; // 3 hours
 
-    public JoinListener(DiscordVerificatorPlugin plugin, UserManager userManager, ConfirmationCodeService confirmationCodeService) {
+    public JoinListener(
+            DiscordVerificatorPlugin plugin,
+            UserManager userManager,
+            ConfirmationCodeService confirmationCodeService,
+            PendingLoginAttemptService pendingLoginAttempts
+    ) {
         this.userManager = userManager;
         this.plugin = plugin;
         this.confirmationCodeService = confirmationCodeService;
+        this.pendingLoginAttempts = pendingLoginAttempts;
     }
 
     @EventHandler(priority = EventPriority.NORMAL)
@@ -61,32 +69,50 @@ public class JoinListener implements Listener {
             return;
         }
 
-        DiscordBot discordBot = plugin.getReadyDiscordBot();
-        if (discordBot == null) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.bot-not-working"));
-            return;
-        }
+        pendingLoginAttempts.recordAttempt(playerName, ipAddress);
+        boolean manualAccess = user.isManualAccessBypassEnabled();
+        DiscordBot discordBot = null;
 
-        // --- CHECKING ATTENDANCE ON THE DISCORD SERVER ---
-        String requiredGuildId = settings.requiredGuildId();
-        // Enforces required Discord guild membership before login
-        if (requiredGuildId != null && !requiredGuildId.isEmpty()) {
-            DiscordBot.GuildMembershipStatus membershipStatus = discordBot.checkUserInGuild(discordId, requiredGuildId);
-            switch (membershipStatus) {
-                case MEMBER -> {
-                    // Continue the login checks.
-                }
-                case NOT_MEMBER -> {
-                    String inviteLink = settings.discordInviteLink();
-                    String kickMessage = String.format(getMessage("in-game.not-in-discord-server"), inviteLink);
-                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, kickMessage);
-                    return;
-                }
-                case TEMPORARY_ERROR, CONFIGURATION_ERROR -> {
-                    event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.discord-check-unavailable"));
-                    return;
+        if (!manualAccess) {
+            discordBot = plugin.getReadyDiscordBot();
+            if (discordBot == null) {
+                event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.bot-not-working"));
+                return;
+            }
+
+            // --- CHECKING ATTENDANCE ON THE DISCORD SERVER ---
+            String requiredGuildId = settings.requiredGuildId();
+            if (requiredGuildId != null && !requiredGuildId.isEmpty()) {
+                DiscordBot.GuildMembershipStatus membershipStatus =
+                        discordBot.checkUserInGuild(discordId, requiredGuildId);
+                switch (membershipStatus) {
+                    case MEMBER -> {
+                        // Continue the login checks.
+                    }
+                    case NOT_MEMBER -> {
+                        String inviteLink = settings.discordInviteLink();
+                        String kickMessage = String.format(
+                                getMessage("in-game.not-in-discord-server"),
+                                inviteLink
+                        );
+                        event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, kickMessage);
+                        return;
+                    }
+                    case TEMPORARY_ERROR, CONFIGURATION_ERROR -> {
+                        event.disallow(
+                                AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                                getMessage("in-game.discord-check-unavailable")
+                        );
+                        return;
+                    }
                 }
             }
+        } else if (!ipAddress.equals(user.getCurrentAllowedIp())) {
+            event.disallow(
+                    AsyncPlayerPreLoginEvent.Result.KICK_OTHER,
+                    getMessage("in-game.manual-confirm-required")
+            );
+            return;
         }
 
         // --- MULTI-ACCOUNT / SHARED IP DETECTION ---
@@ -132,7 +158,9 @@ public class JoinListener implements Listener {
                     List<String> associatedUsernames = userManager.getMinecraftUsernamesByDiscordIds(otherIds);
 
                     sendAdminAlertMultiIp(playerName, ipAddress, associatedUsernames, discordId);
-                    discordBot.sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
+                    if (discordBot != null) {
+                        discordBot.sendSecurityAlert(playerName, ipAddress, associatedUsernames, discordId);
+                    }
 
                     alertCooldowns.put(playerName, currentTime);
                 }
@@ -140,6 +168,11 @@ public class JoinListener implements Listener {
                 event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_OTHER, getMessage("in-game.security-check"));
                 return;
             }
+        }
+
+        if (manualAccess) {
+            userManager.updatePlayerLoginTime(playerName, ipAddress);
+            return;
         }
 
         // --- IP-BASED CODE VERIFICATION (can be disabled via config) ---

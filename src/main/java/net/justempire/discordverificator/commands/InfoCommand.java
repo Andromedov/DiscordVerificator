@@ -49,6 +49,9 @@ public class InfoCommand implements CommandExecutor {
                     commandSender.sendMessage(MessageColorizer.colorize("&6&l Info for: &f" + targetPlayer));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 Discord ID: &f" + info.get("discord_id")));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 Allowed IP: &f" + displayedIp));
+                    commandSender.sendMessage(MessageColorizer.colorize(
+                            "&7 Manual Discord bypass: &f" + info.get("manual_access_bypass")
+                    ));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 First Linked: &f" + info.get("linked_at")));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 Last Login: &f" + info.get("last_login")));
                     commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));

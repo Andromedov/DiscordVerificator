@@ -45,6 +45,10 @@ To join the server, the player should run the seen command to the **Discord bot*
 - `/dvdecision <allow|block|unblock> <discordId|player>` — handles a shared-IP security decision.
   `allow` grants the selected Discord account a full shared-IP bypass; it does not assign a numeric
   per-user limit. A blocked account remains blocked even if this bypass is enabled.
+- `/dvconfirm <player>` — server-console-only emergency command. Confirms the player's most recent
+  login IP and enables manual access without Discord bot readiness, guild membership, or Discord
+  confirmation codes.
+- `/dvconfirm revoke <player>` — revokes manual access and restores the normal Discord checks.
   
 ## 🔞 Permissions
 - `discordVerificator.link` _(for **operators** by default)_ — Allows to use `/link <player> <discordId>`
@@ -73,6 +77,26 @@ output is masked by default:
 The SQLite database and server backups still contain sensitive data and should only be accessible
 to trusted administrators. Set `privacy.mask-ip-addresses-in-staff-messages` to `false` only when
 staff genuinely need full addresses and the staff channels are appropriately restricted.
+
+## 🛟 Emergency console confirmation
+
+Use this only when a linked player has temporarily or permanently lost access to Discord:
+
+1. Ask the player to attempt to join the server.
+2. Within five minutes, run `dvconfirm <player>` from the local server console.
+3. Ask the player to join again. The confirmed IP is now allowed and Discord bot readiness, guild
+   membership, and Discord code checks are skipped for that linked user.
+4. If the player's IP changes, the login is denied until the new attempt is confirmed from the
+   console again.
+5. Run `dvconfirm revoke <player>` to restore normal Discord authentication.
+
+Blocked-account and shared-IP protections are never bypassed. The pending attempt exists only in
+memory and disappears after five minutes or a server restart.
+
+> [!WARNING]
+> On an offline-mode server, a Minecraft username does not prove identity. Coordinate with the
+> trusted player and run the command immediately after their known attempt. Confirming an
+> attacker's newer spoofed attempt would authorize the attacker's IP.
 
 ## 📄 Default config
 > [!IMPORTANT]
