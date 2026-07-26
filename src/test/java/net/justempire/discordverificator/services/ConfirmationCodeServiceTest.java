@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ConfirmationCodeServiceTest {
     @Test
     void codeIsCaseInsensitiveSingleUseAndBoundToDiscordAccount() throws Exception {
-        ConfirmationCodeService service = new ConfirmationCodeService(300);
+        ConfirmationCodeService service = new ConfirmationCodeService(300, 8);
         String code = service.generateVerificationCode("111", "PlayerOne", "127.0.0.1");
 
         assertEquals(8, code.length());
@@ -93,6 +93,32 @@ class ConfirmationCodeServiceTest {
         } finally {
             executor.shutdownNow();
         }
+    }
+
+    @Test
+    void codeLengthCanBeReloadedWithoutInvalidatingActiveCodes() throws Exception {
+        ConfirmationCodeService service = new ConfirmationCodeService(300, 5);
+        String existingCode = service.generateVerificationCode("111", "PlayerOne", "127.0.0.1");
+
+        service.updateSettings(300, 12);
+        String newCode = service.generateVerificationCode("222", "PlayerTwo", "127.0.0.2");
+
+        assertEquals(5, existingCode.length());
+        assertEquals(12, newCode.length());
+        assertEquals("PlayerOne", service.getDataByCodeAndRemove(existingCode, "111").getUsername());
+        assertEquals("PlayerTwo", service.getDataByCodeAndRemove(newCode, "222").getUsername());
+    }
+
+    @Test
+    void codeLengthIsClampedToSafeConfigurationRange() {
+        ConfirmationCodeService service = new ConfirmationCodeService(300, 1);
+        String minimumLengthCode = service.generateVerificationCode("111", "PlayerOne", "127.0.0.1");
+
+        service.updateSettings(300, 100);
+        String maximumLengthCode = service.generateVerificationCode("222", "PlayerTwo", "127.0.0.2");
+
+        assertEquals(ConfirmationCodeService.MIN_CODE_LENGTH, minimumLengthCode.length());
+        assertEquals(ConfirmationCodeService.MAX_CODE_LENGTH, maximumLengthCode.length());
     }
 
     private static final class MutableClock extends Clock {

@@ -15,6 +15,9 @@ import java.util.Objects;
 public class ConfirmationCodeService {
     private static final long MIN_EXPIRATION_SECONDS = 30;
     private static final long MAX_EXPIRATION_SECONDS = 3_600;
+    public static final int MIN_CODE_LENGTH = 2;
+    public static final int MAX_CODE_LENGTH = 16;
+    public static final int DEFAULT_CODE_LENGTH = 5;
 
     private record PendingVerification(
             String discordId,
@@ -28,16 +31,26 @@ public class ConfirmationCodeService {
     private final Map<String, String> activeCodeByUsername = new HashMap<>();
     private final Clock clock;
     private Duration expiration;
+    private int codeLength;
 
     public ConfirmationCodeService(long expirationSeconds) {
-        this(Duration.ofSeconds(clampExpirationSeconds(expirationSeconds)), Clock.systemUTC());
+        this(expirationSeconds, DEFAULT_CODE_LENGTH);
+    }
+
+    public ConfirmationCodeService(long expirationSeconds, int codeLength) {
+        this(Duration.ofSeconds(clampExpirationSeconds(expirationSeconds)), codeLength, Clock.systemUTC());
     }
 
     ConfirmationCodeService(Duration expiration, Clock clock) {
+        this(expiration, DEFAULT_CODE_LENGTH, clock);
+    }
+
+    ConfirmationCodeService(Duration expiration, int codeLength, Clock clock) {
         if (expiration.isZero() || expiration.isNegative()) {
             throw new IllegalArgumentException("Code expiration must be positive");
         }
         this.expiration = expiration;
+        this.codeLength = normalizeCodeLength(codeLength);
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
@@ -56,7 +69,7 @@ public class ConfirmationCodeService {
         String code;
         String normalizedCode;
         do {
-            code = VerificationCodeGenerator.generateVerificationCode();
+            code = VerificationCodeGenerator.generateVerificationCode(codeLength);
             normalizedCode = normalizeGeneratedCode(code);
         } while (pendingByCode.containsKey(normalizedCode));
 
@@ -94,6 +107,16 @@ public class ConfirmationCodeService {
     public synchronized void updateExpirationSeconds(long expirationSeconds) {
         expiration = Duration.ofSeconds(clampExpirationSeconds(expirationSeconds));
         purgeExpiredCodes();
+    }
+
+    public synchronized void updateSettings(long expirationSeconds, int codeLength) {
+        expiration = Duration.ofSeconds(clampExpirationSeconds(expirationSeconds));
+        this.codeLength = normalizeCodeLength(codeLength);
+        purgeExpiredCodes();
+    }
+
+    public static int normalizeCodeLength(int codeLength) {
+        return Math.clamp(codeLength, MIN_CODE_LENGTH, MAX_CODE_LENGTH);
     }
 
     public synchronized int purgeExpiredCodes() {
@@ -142,7 +165,7 @@ public class ConfirmationCodeService {
     }
 
     private static long clampExpirationSeconds(long expirationSeconds) {
-        return Math.max(MIN_EXPIRATION_SECONDS, Math.min(MAX_EXPIRATION_SECONDS, expirationSeconds));
+        return Math.clamp(expirationSeconds, MIN_EXPIRATION_SECONDS, MAX_EXPIRATION_SECONDS);
     }
 
     private static void requireNonBlank(String value, String name) {

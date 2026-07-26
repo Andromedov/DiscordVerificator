@@ -34,8 +34,11 @@ discord-alerts:
 require-ip-verification: true
 
 # Verification codes are single-use and only the latest code issued for a Minecraft account remains valid.
+# Allowed length: 2-16 characters. Values outside this range are clamped.
+# Five characters are convenient for private servers; 8 or more are recommended for stronger protection.
 # Allowed range: 30-3600 seconds. Values outside this range are clamped.
 verification-code:
+  length: 5
   expiration-seconds: 300
 
 # Privacy controls for IP addresses processed by the plugin.

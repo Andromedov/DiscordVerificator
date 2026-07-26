@@ -124,6 +124,12 @@ token: "DISCORD_BOT_TOKEN"
 # Blocked status always takes priority over this bypass.
 default-max-accounts-per-ip: 1
 
+# Verification codes use unambiguous uppercase letters and digits.
+# Allowed range: 2-16. Use 8 or more for stronger brute-force protection.
+verification-code:
+  length: 5
+  expiration-seconds: 300
+
 # If configured, multi-account alerts will be sent directly to your Discord staff channel
 discord-alerts:
   channel-id: "" # E.g., "123456789012345678"

@@ -42,6 +42,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             String discordAlertChannelId,
             String discordAdminRoleId,
             long verificationCodeExpirationSeconds,
+            int verificationCodeLength,
             boolean maskIpAddressesInStaffMessages,
             int ipHistoryRetentionDays
     ) {
@@ -93,7 +94,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         String jsonPath = String.format("%s/users.json", getDataFolder());
         userManager = new UserManager(databaseService, jsonPath, logger);
 
-        confirmationCodeService = new ConfirmationCodeService(runtimeSettings.verificationCodeExpirationSeconds());
+        confirmationCodeService = new ConfirmationCodeService(
+                runtimeSettings.verificationCodeExpirationSeconds(),
+                runtimeSettings.verificationCodeLength()
+        );
         pendingLoginAttemptService = new PendingLoginAttemptService();
         verificationCodeCleanupTask = getServer().getScheduler().runTaskTimerAsynchronously(
                 this,
@@ -326,7 +330,10 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                         mergeConfig();
                         refreshRuntimeSettings();
                         setupMessages();
-                        confirmationCodeService.updateExpirationSeconds(runtimeSettings.verificationCodeExpirationSeconds());
+                        confirmationCodeService.updateSettings(
+                                runtimeSettings.verificationCodeExpirationSeconds(),
+                                runtimeSettings.verificationCodeLength()
+                        );
                         setupBot();
                         logger.info("Configuration reload complete; Discord reconnect started.");
                     } catch (RuntimeException e) {
@@ -397,6 +404,18 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             logger.warning("default-max-accounts-per-ip must be at least 1; using 1.");
         }
 
+        int configuredCodeLength = getConfig().getInt(
+                "verification-code.length",
+                ConfirmationCodeService.DEFAULT_CODE_LENGTH
+        );
+        int normalizedCodeLength = ConfirmationCodeService.normalizeCodeLength(configuredCodeLength);
+        if (configuredCodeLength != normalizedCodeLength) {
+            logger.warning("verification-code.length must be between "
+                    + ConfirmationCodeService.MIN_CODE_LENGTH + " and "
+                    + ConfirmationCodeService.MAX_CODE_LENGTH + "; using "
+                    + normalizedCodeLength + ".");
+        }
+
         runtimeSettings = new RuntimeSettings(
                 getConfig().getString("required-guild-id", ""),
                 getConfig().getString("discord-invite-link", "https://discord.gg/"),
@@ -405,8 +424,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 getConfig().getString("discord-alerts.channel-id", ""),
                 getConfig().getString("discord-alerts.admin-role-id", ""),
                 getConfig().getLong("verification-code.expiration-seconds", 300),
+                normalizedCodeLength,
                 getConfig().getBoolean("privacy.mask-ip-addresses-in-staff-messages", true),
-                Math.max(1, Math.min(3650, getConfig().getInt("privacy.ip-history-retention-days", 30)))
+                Math.clamp(getConfig().getInt("privacy.ip-history-retention-days", 30), 1, 3650)
         );
     }
 
