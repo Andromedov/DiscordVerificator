@@ -6,7 +6,6 @@ import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -47,16 +46,16 @@ public class RelinkCommand implements CommandExecutor {
         String oldPlayerName = parsedOldPlayerName.get();
         String newPlayerName = parsedNewPlayerName.get();
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 userManager.relinkUser(oldPlayerName, newPlayerName);
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-relinked")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-relinked")));
             } catch (UserNotFoundException e) {
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (MinecraftUsernameAlreadyLinkedException e) {
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-already-linked")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-already-linked")));
             } catch (Exception e) {
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
                 plugin.getLogger().log(Level.SEVERE, "Failed to execute relink command", e);
             }
         });

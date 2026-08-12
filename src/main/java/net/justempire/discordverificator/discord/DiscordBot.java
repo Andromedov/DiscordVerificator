@@ -24,7 +24,6 @@ import net.justempire.discordverificator.models.UsernameAndIp;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.IpAddressUtil;
-import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 
 import java.awt.Color;
@@ -168,7 +167,7 @@ public class DiscordBot extends ListenerAdapter {
             return;
         }
 
-        event.deferEdit().queue(hook -> Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        event.deferEdit().queue(hook -> plugin.runAsync(() -> {
             try {
                 boolean updated = switch (action.type()) {
                     case ALLOW -> userManager.setAllowSharedIp(action.targetDiscordId(), true);
@@ -284,7 +283,7 @@ public class DiscordBot extends ListenerAdapter {
     private void onConfirmSlashCommand(@NotNull SlashCommandInteractionEvent event) {
         event.deferReply(true).queue();
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 // Getting ID of sender
                 String discordId = event.getUser().getId();

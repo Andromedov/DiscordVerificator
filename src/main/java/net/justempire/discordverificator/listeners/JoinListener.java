@@ -15,7 +15,6 @@ import net.md_5.bungee.api.chat.ClickEvent;
 import net.md_5.bungee.api.chat.hover.content.Text;
 import net.md_5.bungee.api.chat.HoverEvent;
 import net.md_5.bungee.api.chat.TextComponent;
-import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent;
 import org.bukkit.event.EventHandler;
@@ -253,11 +252,9 @@ public class JoinListener implements Listener {
     }
 
     private void broadcastToAdmins(TextComponent message) {
-        plugin.runOnMainThread(() -> {
-            for (Player player : Bukkit.getOnlinePlayers()) {
-                if (player.hasPermission("discordVerificator.alerts")) {
-                    player.spigot().sendMessage(message);
-                }
+        plugin.scheduler().broadcastToPlayers(player -> {
+            if (player.hasPermission("discordVerificator.alerts")) {
+                player.spigot().sendMessage(message.duplicate());
             }
         });
     }

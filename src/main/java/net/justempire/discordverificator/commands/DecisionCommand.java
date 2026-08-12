@@ -5,7 +5,6 @@ import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -51,7 +50,7 @@ public class DecisionCommand implements CommandExecutor {
             return true;
         }
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 AccountIdentifierUtil.ParsedTarget target = parsedTarget.get();
                 String discordId = switch (target.type()) {
@@ -69,18 +68,18 @@ public class DecisionCommand implements CommandExecutor {
                 };
 
                 if (updated) {
-                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
+                    plugin.sendMessageScheduled(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-success")));
                 } else {
-                    plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(
+                    plugin.sendMessageScheduled(sender, MessageColorizer.colorize(
                             DiscordVerificatorPlugin.getMessage("in-game.decision-target-not-found")
                     ));
                 }
             } catch (UserNotFoundException e) {
-                plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(
+                plugin.sendMessageScheduled(sender, MessageColorizer.colorize(
                         DiscordVerificatorPlugin.getMessage("in-game.decision-target-not-found")
                 ));
             } catch (Exception e) {
-                plugin.sendMessageOnMainThread(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));
+                plugin.sendMessageScheduled(sender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.action-failed")));
                 plugin.getLogger().log(Level.SEVERE, "Failed to execute decision command", e);
             }
         });

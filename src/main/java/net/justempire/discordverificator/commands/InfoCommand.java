@@ -6,7 +6,6 @@ import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import net.justempire.discordverificator.utils.IpAddressUtil;
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -47,7 +46,7 @@ public class InfoCommand implements CommandExecutor {
         }
         String targetPlayer = parsedTargetPlayer.get();
 
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 Map<String, String> info = userManager.getPlayerInfo(targetPlayer);
                 String displayedIp = IpAddressUtil.displayForStaff(
@@ -55,7 +54,7 @@ public class InfoCommand implements CommandExecutor {
                         plugin.getRuntimeSettings().maskIpAddressesInStaffMessages()
                 );
 
-                plugin.runOnMainThread(() -> {
+                plugin.runForSender(commandSender, () -> {
                     commandSender.sendMessage(MessageColorizer.colorize("&8&m-----------------------------"));
                     commandSender.sendMessage(MessageColorizer.colorize("&6&l Info for: &f" + targetPlayer));
                     commandSender.sendMessage(MessageColorizer.colorize("&7 Discord ID: &f" + info.get("discord_id")));
@@ -69,9 +68,9 @@ public class InfoCommand implements CommandExecutor {
                 });
 
             } catch (UserNotFoundException e) {
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (Exception e) {
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
                 plugin.getLogger().log(Level.SEVERE, "Failed to execute info command", e);
             }
         });

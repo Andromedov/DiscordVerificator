@@ -6,18 +6,18 @@ import net.dv8tion.jda.api.OnlineStatus;
 import net.justempire.discordverificator.commands.*;
 import net.justempire.discordverificator.discord.DiscordBot;
 import net.justempire.discordverificator.listeners.JoinListener;
+import net.justempire.discordverificator.scheduler.PluginScheduler;
 import net.justempire.discordverificator.services.ConfirmationCodeService;
 import net.justempire.discordverificator.services.DatabaseService;
 import net.justempire.discordverificator.services.PendingLoginAttemptService;
 import net.justempire.discordverificator.services.SharedIpPolicy;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
-import org.bukkit.Bukkit;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
+import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 
 import java.io.File;
 import java.io.IOException;
@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -60,8 +61,9 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     private UserManager userManager;
     private ConfirmationCodeService confirmationCodeService;
     private PendingLoginAttemptService pendingLoginAttemptService;
-    private BukkitTask verificationCodeCleanupTask;
-    private BukkitTask ipDataCleanupTask;
+    private ScheduledTask verificationCodeCleanupTask;
+    private ScheduledTask ipDataCleanupTask;
+    private PluginScheduler scheduler;
     private volatile DiscordBot discordBot;
 
     private volatile JDA currentJDA;
@@ -77,6 +79,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
     public void onEnable() {
         logger = this.getLogger();
         shuttingDown = false;
+        scheduler = new PluginScheduler(this);
 
         mergeConfig();
         refreshRuntimeSettings();
@@ -99,17 +102,15 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 runtimeSettings.verificationCodeLength()
         );
         pendingLoginAttemptService = new PendingLoginAttemptService();
-        verificationCodeCleanupTask = getServer().getScheduler().runTaskTimerAsynchronously(
-                this,
+        verificationCodeCleanupTask = scheduler.runAsyncAtFixedRate(
                 confirmationCodeService::purgeExpiredCodes,
-                20L * 60,
-                20L * 60
+                Duration.ofMinutes(1),
+                Duration.ofMinutes(1)
         );
-        ipDataCleanupTask = getServer().getScheduler().runTaskTimerAsynchronously(
-                this,
+        ipDataCleanupTask = scheduler.runAsyncAtFixedRate(
                 this::purgeExpiredIpData,
-                1L,
-                20L * 60 * 60 * 24
+                Duration.ofMillis(50),
+                Duration.ofDays(1)
         );
 
         // Setting up the messages
@@ -151,7 +152,8 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         }
 
         shutdownBotSync();
-        getServer().getScheduler().cancelTasks(this);
+        getServer().getAsyncScheduler().cancelTasks(this);
+        getServer().getGlobalRegionScheduler().cancelTasks(this);
 
         if (confirmationCodeService != null) {
             confirmationCodeService.clear();
@@ -221,17 +223,30 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
         return runtimeSettings;
     }
 
-    public void runOnMainThread(Runnable action) {
-        Objects.requireNonNull(action, "action");
-        if (Bukkit.isPrimaryThread()) {
-            action.run();
-        } else if (!shuttingDown) {
-            getServer().getScheduler().runTask(this, action);
+    public void runAsync(Runnable action) {
+        if (!shuttingDown) {
+            scheduler.runAsync(action);
         }
     }
 
-    public void sendMessageOnMainThread(CommandSender sender, String message) {
-        runOnMainThread(() -> sender.sendMessage(message));
+    public void runGlobal(Runnable action) {
+        if (!shuttingDown) {
+            scheduler.runGlobal(action);
+        }
+    }
+
+    public void runForSender(CommandSender sender, Runnable action) {
+        if (!shuttingDown) {
+            scheduler.runFor(sender, action);
+        }
+    }
+
+    public void sendMessageScheduled(CommandSender sender, String message) {
+        runForSender(sender, () -> sender.sendMessage(message));
+    }
+
+    public PluginScheduler scheduler() {
+        return scheduler;
     }
 
     private void mergeConfig() {
@@ -278,7 +293,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
         discordServiceState = DiscordServiceState.STARTING;
 
-        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+        runAsync(() -> {
             DiscordBot bot = new DiscordBot(this, logger, userManager, confirmationCodeService);
             JDA candidateJDA = null;
 
@@ -320,11 +335,11 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
         logger.info("Reloading plugin...");
 
-        getServer().getScheduler().runTaskAsynchronously(this, () -> {
+        runAsync(() -> {
             shutdownBotSync();
 
             try {
-                getServer().getScheduler().runTask(this, () -> {
+                runGlobal(() -> {
                     try {
                         reloadConfig();
                         mergeConfig();
