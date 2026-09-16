@@ -5,7 +5,6 @@ import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.exceptions.NotFoundException;
 import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -44,14 +43,14 @@ public class UnlinkCommand implements CommandExecutor {
         String targetPlayer = parsedTargetPlayer.get();
 
         // Run database operation asynchronously
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 userManager.unlinkUser(targetPlayer);
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-unlinked")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-unlinked")));
             } catch (NotFoundException e) {
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-was-not-linked")));
             } catch (Exception e) {
-                plugin.sendMessageOnMainThread(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
+                plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("discord.error-occurred")));
                 plugin.getLogger().log(Level.SEVERE, "Failed to execute unlink command", e);
             }
         });

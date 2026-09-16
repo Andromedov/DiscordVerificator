@@ -7,7 +7,6 @@ import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.IpAddressUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
-import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -79,7 +78,7 @@ public class ManualConfirmCommand implements CommandExecutor {
         }
 
         PendingLoginAttemptService.PendingLoginAttempt attempt = claimedAttempt.get();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 userManager.enableManualAccess(attempt.minecraftUsername(), attempt.ipAddress());
                 String displayedIp = IpAddressUtil.displayForStaff(
@@ -88,7 +87,7 @@ public class ManualConfirmCommand implements CommandExecutor {
                 );
                 plugin.getLogger().info("Console enabled manual Discord bypass for Minecraft user "
                         + attempt.minecraftUsername() + " at IP " + displayedIp);
-                plugin.sendMessageOnMainThread(
+                plugin.sendMessageScheduled(
                         sender,
                         String.format(
                                 message("in-game.manual-confirm-success"),
@@ -97,32 +96,32 @@ public class ManualConfirmCommand implements CommandExecutor {
                         )
                 );
             } catch (UserNotFoundException e) {
-                plugin.sendMessageOnMainThread(sender, message("in-game.player-was-not-linked"));
+                plugin.sendMessageScheduled(sender, message("in-game.player-was-not-linked"));
             } catch (RuntimeException e) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to enable manual Discord bypass", e);
-                plugin.sendMessageOnMainThread(sender, message("in-game.action-failed"));
+                plugin.sendMessageScheduled(sender, message("in-game.action-failed"));
             }
         });
         return true;
     }
 
     private void revoke(CommandSender sender, String minecraftUsername) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        plugin.runAsync(() -> {
             try {
                 if (!userManager.revokeManualAccess(minecraftUsername)) {
-                    plugin.sendMessageOnMainThread(sender, message("in-game.player-was-not-linked"));
+                    plugin.sendMessageScheduled(sender, message("in-game.player-was-not-linked"));
                     return;
                 }
 
                 plugin.getLogger().info("Console revoked manual Discord bypass for Minecraft user "
                         + minecraftUsername);
-                plugin.sendMessageOnMainThread(
+                plugin.sendMessageScheduled(
                         sender,
                         String.format(message("in-game.manual-confirm-revoked"), minecraftUsername)
                 );
             } catch (RuntimeException e) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to revoke manual Discord bypass", e);
-                plugin.sendMessageOnMainThread(sender, message("in-game.action-failed"));
+                plugin.sendMessageScheduled(sender, message("in-game.action-failed"));
             }
         });
     }

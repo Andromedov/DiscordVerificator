@@ -2,12 +2,12 @@
 
 <p>
   <a href="https://www.java.com/"><img src="https://img.shields.io/badge/Java-gray?color=C8273F" /></a>
-  <a href="https://hub.spigotmc.org/javadocs/spigot/"><img src="https://img.shields.io/badge/Spigot_API-gray?color=F07427&logo=spigotmc&logoColor=FFFFFF" /></a>
+  <a href="https://docs.papermc.io/folia/"><img src="https://img.shields.io/badge/Paper%20%2F%20Folia-1.21.11-blue" /></a>
   <a href="https://jda.wiki/"><img src="https://img.shields.io/badge/JDA-gray?color=5662F6&logo=discord&logoColor=FFFFFF" /></a>
   <a href="https://github.com/vshymanskyy/StandWithUkraine"><img src="https://raw.githubusercontent.com/vshymanskyy/StandWithUkraine/main/badges/StandWithUkraine.svg"></a>
 </p>
 
- **DiscordVerificator** is a **Spigot** plugin that allows you to do player authentication using **Discord bot**.<br>
+ **DiscordVerificator** is a **Paper/Folia 1.21.11** plugin that allows you to do player authentication using **Discord bot**.<br>
 
 > [!WARNING]
 > This plugin is **intended** to be used on **private servers** with the **manual player addition** because it involves you to manually link each player to their **Discord profile**.
