@@ -37,7 +37,9 @@ To join the server, the player should run the seen command to the **Discord bot*
 > <img height=200 src="https://github.com/MrQuackDuck/DiscordVerificator/assets/61251075/ef98c616-3c90-41cf-a111-ae49f416dc3c">
 
 ## 💻 Commands
-- `/link <player> <discordId>` — links the player to its Discord profile. ([how to get discord id?](https://youtu.be/RzTWH0g2xbo?si=oQT2rCSuf6B3Z5kY))
+- `/link <player> <discordId>` — links one Java or Bedrock player to a Discord profile.
+- `/link <javaPlayer> <bedrockPlayer> <discordId>` — atomically links both editions to the same
+  Discord profile. The configured Floodgate prefix is added to `bedrockPlayer` automatically.
 - `/unlink <player>` — unlinks the player from its Discord profile.
 - `/relink <old_player> <new_player>` — relinks the player from its minecraft username to another one.
 - `/dvreload` — reloads the plugin (_including Discord bot_).
@@ -52,11 +54,35 @@ To join the server, the player should run the seen command to the **Discord bot*
 
 Command identifiers are validated consistently:
 
-- Minecraft usernames must contain 3-16 ASCII letters, digits, or underscores and are normalized
-  to lowercase for database operations;
+- Java usernames must contain 3-16 ASCII letters, digits, or underscores;
+- Floodgate usernames accept the configured prefix (a dot by default) followed by 1-16 letters,
+  digits, or underscores. Floodgate-replaced spaces therefore work as underscores;
+- Minecraft usernames are normalized to lowercase for case-insensitive database operations;
 - Discord IDs must contain exactly 17-20 decimal digits;
 - commands that accept either identifier reject all other values instead of treating them as an
   arbitrary Discord ID.
+
+## Bedrock support (Geyser/Floodgate)
+
+Install Geyser and Floodgate on the server or proxy according to the
+[official Geyser documentation](https://geysermc.org/wiki/geyser/setup/). Set the same prefix in
+this plugin and Floodgate (the default in both examples is `.`):
+
+```yml
+bedrock:
+  username-prefix: "."
+```
+
+To attach both editions to one Discord profile with one command, use:
+
+```text
+/link JavaPlayer BedrockPlayer 123456789012345678
+```
+
+This stores `javaplayer` and `.bedrockplayer` as separate Minecraft aliases of the same Discord
+account. Supplying `.BedrockPlayer` explicitly produces the same result. If either alias is already
+linked, the entire operation is rolled back so a Java account cannot accidentally claim another
+player's Bedrock identity.
   
 ## 🔞 Permissions
 - `discordVerificator.link` _(for **operators** by default)_ — Allows to use `/link <player> <discordId>`

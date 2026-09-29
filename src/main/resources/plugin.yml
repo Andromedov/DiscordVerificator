@@ -4,11 +4,12 @@ main: net.justempire.discordverificator.DiscordVerificatorPlugin
 api-version: '1.21.11'
 folia-supported: true
 authors: ['mrquackduck', 'Andromedov']
+softdepend: [floodgate, Geyser-Spigot]
 
 commands:
   link:
     description: Link player to Discord profile
-    usage: link <Player> <Discord Id>
+    usage: link <Player> <Discord Id> | link <Java Player> <Bedrock Player> <Discord Id>
   unlink:
     description: Unlink player from Discord
     usage: unlink <Player>

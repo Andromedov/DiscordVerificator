@@ -42,7 +42,7 @@ public class DecisionCommand implements CommandExecutor {
             return true;
         }
 
-        var parsedTarget = AccountIdentifierUtil.parseTarget(args[1]);
+        var parsedTarget = plugin.parseAccountTarget(args[1]);
         if (parsedTarget.isEmpty()) {
             sender.sendMessage(MessageColorizer.colorize(
                     DiscordVerificatorPlugin.getMessage("in-game.invalid-decision-target-format")

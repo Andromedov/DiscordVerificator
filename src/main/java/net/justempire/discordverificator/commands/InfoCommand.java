@@ -3,7 +3,6 @@ package net.justempire.discordverificator.commands;
 import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.UserManager;
-import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import net.justempire.discordverificator.utils.IpAddressUtil;
 import org.bukkit.command.Command;
@@ -37,7 +36,7 @@ public class InfoCommand implements CommandExecutor {
             return true;
         }
 
-        var parsedTargetPlayer = AccountIdentifierUtil.parseMinecraftUsername(arguments[0]);
+        var parsedTargetPlayer = plugin.parseMinecraftUsername(arguments[0]);
         if (parsedTargetPlayer.isEmpty()) {
             commandSender.sendMessage(MessageColorizer.colorize(
                     DiscordVerificatorPlugin.getMessage("in-game.invalid-minecraft-username-format")

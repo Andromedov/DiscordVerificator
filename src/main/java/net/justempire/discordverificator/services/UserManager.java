@@ -416,13 +416,26 @@ public class UserManager {
     }
 
     public synchronized void linkUser(String discordId, String minecraftUsername) throws MinecraftUsernameAlreadyLinkedException {
+        linkUsers(discordId, List.of(minecraftUsername));
+    }
+
+    public synchronized void linkUsers(String discordId, List<String> minecraftUsernames)
+            throws MinecraftUsernameAlreadyLinkedException {
+        if (minecraftUsernames == null || minecraftUsernames.isEmpty()
+                || minecraftUsernames.stream().anyMatch(name -> name == null || name.isBlank())) {
+            throw new IllegalArgumentException("At least one non-blank Minecraft username is required");
+        }
+
+        List<String> distinctUsernames = minecraftUsernames.stream().distinct().toList();
         try {
             boolean linked = databaseService.executeInTransaction(connection -> {
                 String checkUsernameSql = "SELECT 1 FROM linked_accounts WHERE minecraft_username = ? COLLATE NOCASE";
                 try (PreparedStatement pstmt = connection.prepareStatement(checkUsernameSql)) {
-                    pstmt.setString(1, minecraftUsername);
-                    if (pstmt.executeQuery().next()) {
-                        return false;
+                    for (String minecraftUsername : distinctUsernames) {
+                        pstmt.setString(1, minecraftUsername);
+                        if (pstmt.executeQuery().next()) {
+                            return false;
+                        }
                     }
                 }
 
@@ -435,10 +448,14 @@ public class UserManager {
 
                 String createLinkSql = "INSERT INTO linked_accounts (minecraft_username, discord_id, linked_at) VALUES (?, ?, ?)";
                 try (PreparedStatement pstmt = connection.prepareStatement(createLinkSql)) {
-                    pstmt.setString(1, minecraftUsername);
-                    pstmt.setString(2, discordId);
-                    pstmt.setTimestamp(3, Timestamp.from(Instant.now()));
-                    pstmt.executeUpdate();
+                    Timestamp linkedAt = Timestamp.from(Instant.now());
+                    for (String minecraftUsername : distinctUsernames) {
+                        pstmt.setString(1, minecraftUsername);
+                        pstmt.setString(2, discordId);
+                        pstmt.setTimestamp(3, linkedAt);
+                        pstmt.addBatch();
+                    }
+                    pstmt.executeBatch();
                 }
                 return true;
             });
