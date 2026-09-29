@@ -13,6 +13,7 @@ import net.justempire.discordverificator.services.PendingLoginAttemptService;
 import net.justempire.discordverificator.services.SharedIpPolicy;
 import net.justempire.discordverificator.services.UserManager;
 import net.justempire.discordverificator.utils.MessageColorizer;
+import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -44,6 +45,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
             String discordAdminRoleId,
             long verificationCodeExpirationSeconds,
             int verificationCodeLength,
+            String bedrockUsernamePrefix,
             boolean maskIpAddressesInStaffMessages,
             int ipHistoryRetentionDays
     ) {
@@ -221,6 +223,18 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
 
     public RuntimeSettings getRuntimeSettings() {
         return runtimeSettings;
+    }
+
+    public java.util.Optional<String> parseMinecraftUsername(String input) {
+        return AccountIdentifierUtil.parseMinecraftUsername(input, runtimeSettings.bedrockUsernamePrefix());
+    }
+
+    public java.util.Optional<AccountIdentifierUtil.ParsedTarget> parseAccountTarget(String input) {
+        return AccountIdentifierUtil.parseTarget(input, runtimeSettings.bedrockUsernamePrefix());
+    }
+
+    public java.util.Optional<String> parseBedrockUsername(String input) {
+        return AccountIdentifierUtil.parseBedrockUsername(input, runtimeSettings.bedrockUsernamePrefix());
     }
 
     public void runAsync(Runnable action) {
@@ -431,6 +445,15 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                     + normalizedCodeLength + ".");
         }
 
+        String bedrockUsernamePrefix = getConfig().getString(
+                "bedrock.username-prefix",
+                AccountIdentifierUtil.DEFAULT_BEDROCK_USERNAME_PREFIX
+        );
+        if (!AccountIdentifierUtil.isValidBedrockUsernamePrefix(bedrockUsernamePrefix)) {
+            logger.warning("bedrock.username-prefix must contain at most 8 non-whitespace characters; using '.'.");
+            bedrockUsernamePrefix = AccountIdentifierUtil.DEFAULT_BEDROCK_USERNAME_PREFIX;
+        }
+
         runtimeSettings = new RuntimeSettings(
                 getConfig().getString("required-guild-id", ""),
                 getConfig().getString("discord-invite-link", "https://discord.gg/"),
@@ -440,6 +463,7 @@ public class DiscordVerificatorPlugin extends JavaPlugin {
                 getConfig().getString("discord-alerts.admin-role-id", ""),
                 getConfig().getLong("verification-code.expiration-seconds", 300),
                 normalizedCodeLength,
+                bedrockUsernamePrefix,
                 getConfig().getBoolean("privacy.mask-ip-addresses-in-staff-messages", true),
                 Math.clamp(getConfig().getInt("privacy.ip-history-retention-days", 30), 1, 3650)
         );

@@ -13,6 +13,33 @@ class AccountIdentifierUtilTest {
                 "player_name_1234",
                 AccountIdentifierUtil.parseMinecraftUsername("Player_Name_1234").orElseThrow()
         );
+        assertEquals(
+                ".bedrock_player",
+                AccountIdentifierUtil.parseMinecraftUsername(" .Bedrock_Player ").orElseThrow()
+        );
+    }
+
+    @Test
+    void addsConfiguredFloodgatePrefixToBedrockUsername() {
+        assertEquals(
+                ".bedrockplayer",
+                AccountIdentifierUtil.parseBedrockUsername("BedrockPlayer", ".").orElseThrow()
+        );
+        assertEquals(
+                ".bedrockplayer",
+                AccountIdentifierUtil.parseBedrockUsername(".BedrockPlayer", ".").orElseThrow()
+        );
+        assertEquals(
+                "*bedrockplayer",
+                AccountIdentifierUtil.parseBedrockUsername("BedrockPlayer", "*").orElseThrow()
+        );
+    }
+
+    @Test
+    void rejectsDotsOutsideConfiguredFloodgatePrefix() {
+        assertTrue(AccountIdentifierUtil.parseMinecraftUsername("Bed.rock").isEmpty());
+        assertTrue(AccountIdentifierUtil.parseMinecraftUsername("..Bedrock").isEmpty());
+        assertTrue(AccountIdentifierUtil.parseBedrockUsername(".Bedrock", "*").isEmpty());
     }
 
     @Test
@@ -77,6 +104,10 @@ class AccountIdentifierUtilTest {
         assertEquals("someplayer", username.value());
         assertEquals(AccountIdentifierUtil.TargetType.DISCORD_ID, discordId.type());
         assertEquals("123456789012345678", discordId.value());
+        AccountIdentifierUtil.ParsedTarget bedrockUsername =
+                AccountIdentifierUtil.parseTarget(".BedrockPlayer").orElseThrow();
+        assertEquals(AccountIdentifierUtil.TargetType.MINECRAFT_USERNAME, bedrockUsername.type());
+        assertEquals(".bedrockplayer", bedrockUsername.value());
         assertTrue(AccountIdentifierUtil.parseTarget("arbitrary.target").isEmpty());
     }
 }

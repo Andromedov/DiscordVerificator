@@ -4,7 +4,6 @@ import net.justempire.discordverificator.DiscordVerificatorPlugin;
 import net.justempire.discordverificator.exceptions.UserNotFoundException;
 import net.justempire.discordverificator.services.PendingLoginAttemptService;
 import net.justempire.discordverificator.services.UserManager;
-import net.justempire.discordverificator.utils.AccountIdentifierUtil;
 import net.justempire.discordverificator.utils.IpAddressUtil;
 import net.justempire.discordverificator.utils.MessageColorizer;
 import org.bukkit.command.Command;
@@ -50,7 +49,7 @@ public class ManualConfirmCommand implements CommandExecutor {
                 return true;
             }
 
-            var parsedMinecraftUsername = AccountIdentifierUtil.parseMinecraftUsername(args[1]);
+            var parsedMinecraftUsername = plugin.parseMinecraftUsername(args[1]);
             if (parsedMinecraftUsername.isEmpty()) {
                 sender.sendMessage(message("in-game.invalid-minecraft-username-format"));
                 return true;
@@ -64,7 +63,7 @@ public class ManualConfirmCommand implements CommandExecutor {
             return true;
         }
 
-        var parsedMinecraftUsername = AccountIdentifierUtil.parseMinecraftUsername(args[0]);
+        var parsedMinecraftUsername = plugin.parseMinecraftUsername(args[0]);
         if (parsedMinecraftUsername.isEmpty()) {
             sender.sendMessage(message("in-game.invalid-minecraft-username-format"));
             return true;

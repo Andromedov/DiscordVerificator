@@ -56,6 +56,34 @@ class UserManagerTransactionTest {
     }
 
     @Test
+    void linksJavaAndBedrockAliasesAtomically() throws Exception {
+        String discordId = "121212121212121212";
+
+        userManager.linkUsers(discordId, java.util.List.of("JavaPlayer", ".BedrockPlayer"));
+
+        assertEquals(discordId, userManager.getDiscordIdByMinecraftUsername("javaplayer"));
+        assertEquals(discordId, userManager.getDiscordIdByMinecraftUsername(".bedrockplayer"));
+    }
+
+    @Test
+    void occupiedBedrockAliasRollsBackPairedLink() throws Exception {
+        userManager.linkUser("131313131313131313", ".TakenBedrock");
+
+        assertThrows(
+                MinecraftUsernameAlreadyLinkedException.class,
+                () -> userManager.linkUsers(
+                        "141414141414141414",
+                        java.util.List.of("NewJavaPlayer", ".takenbedrock")
+                )
+        );
+
+        assertThrows(UserNotFoundException.class,
+                () -> userManager.getDiscordIdByMinecraftUsername("NewJavaPlayer"));
+        assertThrows(UserNotFoundException.class,
+                () -> userManager.getFullUserByDiscordId("141414141414141414"));
+    }
+
+    @Test
     void failedLinkRollsBackNewUserRecord() throws SQLException {
         try (Statement statement = databaseService.getConnection().createStatement()) {
             statement.execute("""

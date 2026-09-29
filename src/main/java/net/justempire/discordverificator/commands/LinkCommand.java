@@ -11,6 +11,7 @@ import org.bukkit.command.CommandSender;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.logging.Level;
+import java.util.List;
 
 public class LinkCommand implements CommandExecutor {
     private final UserManager userManager;
@@ -28,32 +29,40 @@ public class LinkCommand implements CommandExecutor {
             return true;
         }
 
-        if (arguments.length != 2) {
+        if (arguments.length != 2 && arguments.length != 3) {
             commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-link-format")));
             return true;
         }
 
-        var parsedPlayerName = AccountIdentifierUtil.parseMinecraftUsername(arguments[0]);
-        if (parsedPlayerName.isEmpty()) {
+        boolean pairedLink = arguments.length == 3;
+        var parsedJavaName = pairedLink
+                ? AccountIdentifierUtil.parseJavaUsername(arguments[0])
+                : plugin.parseMinecraftUsername(arguments[0]);
+        var parsedBedrockName = pairedLink
+                ? plugin.parseBedrockUsername(arguments[1])
+                : java.util.Optional.<String>empty();
+        if (parsedJavaName.isEmpty() || (pairedLink && parsedBedrockName.isEmpty())) {
             commandSender.sendMessage(MessageColorizer.colorize(
                     DiscordVerificatorPlugin.getMessage("in-game.invalid-minecraft-username-format")
             ));
             return true;
         }
 
-        var parsedDiscordId = AccountIdentifierUtil.parseDiscordId(arguments[1]);
+        var parsedDiscordId = AccountIdentifierUtil.parseDiscordId(arguments[pairedLink ? 2 : 1]);
         if (parsedDiscordId.isEmpty()) {
             commandSender.sendMessage(MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.invalid-user-id-format")));
             return true;
         }
 
-        String playerName = parsedPlayerName.get();
+        List<String> playerNames = pairedLink
+                ? List.of(parsedJavaName.get(), parsedBedrockName.get()).stream().distinct().toList()
+                : List.of(parsedJavaName.get());
         String discordUserId = parsedDiscordId.get();
 
         // Run database operation asynchronously
         plugin.runAsync(() -> {
             try {
-                userManager.linkUser(discordUserId, playerName);
+                userManager.linkUsers(discordUserId, playerNames);
                 plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.successfully-linked")));
             } catch (MinecraftUsernameAlreadyLinkedException e) {
                 plugin.sendMessageScheduled(commandSender, MessageColorizer.colorize(DiscordVerificatorPlugin.getMessage("in-game.player-already-linked")));
